@@ -1,0 +1,83 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "deep_extraction_doc_v2",
+  "title": "Deep Document Extraction v2.0.0 (Phase 3: entities + facts + discourse)",
+  "description": "Per-window output schema for document deep-extraction, thorough tier. Mirrored inline in scripts/prompts/deep_extraction_doc_v2.md. Coordinates are GLOBAL RAG-chunk indices (windows carry global [N] labels; no offset). v2 adds the discourse (argument) layer on top of v1's entities + facts; move_types reuse the session_discourse_moves CHECK vocab so no schema migration of that table's enum is needed.",
+  "type": "object",
+  "required": ["document", "entities", "facts", "discourse"],
+  "additionalProperties": true,
+  "properties": {
+    "document": {
+      "type": "object",
+      "required": ["name", "summary", "doc_kind", "chunk_span"],
+      "additionalProperties": true,
+      "properties": {
+        "name": {"type": "string", "minLength": 1, "maxLength": 200},
+        "summary": {"type": "string"},
+        "doc_kind": {"enum": ["whitepaper", "paper", "report", "essay", "spec", "book", "manual", "textbook", "handbook", "other"]},
+        "chunk_span": {
+          "type": "array",
+          "items": {"type": "integer", "minimum": 0},
+          "minItems": 2, "maxItems": 2,
+          "description": "Global [first, last] chunk index this window covers."
+        }
+      }
+    },
+    "entities": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "type", "first_seen_chunk", "mention_count"],
+        "additionalProperties": true,
+        "properties": {
+          "name": {"type": "string"},
+          "type": {"enum": ["Person", "Organization", "Project", "Concept", "Location", "Protocol", "CaseStudy", "Document", "Event"]},
+          "first_seen_chunk": {"type": "integer", "minimum": 0},
+          "mention_count": {"type": "integer", "minimum": 1}
+        }
+      }
+    },
+    "facts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["subject", "predicate", "object", "object_literal", "fact_text", "chunk_range", "confidence"],
+        "additionalProperties": true,
+        "properties": {
+          "subject": {"type": "string"},
+          "predicate": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]*$"},
+          "object": {"type": ["string", "null"]},
+          "object_literal": {"type": ["string", "null"]},
+          "fact_text": {"type": "string"},
+          "chunk_range": {
+            "type": "array",
+            "items": {"type": "integer", "minimum": 0},
+            "minItems": 2, "maxItems": 2
+          },
+          "confidence": {"enum": ["high", "medium", "low"]}
+        }
+      }
+    },
+    "discourse": {
+      "type": "array",
+      "description": "The document's ARGUMENT structure (plan §Q2). move_type should be one of thesis|claim|evidence|premise|counterpoint|open_question|definition|implication and status one of asserted|supported|contested|speculative|open|deferred — but these are validated SHAPE-only here (no enum/maxLength) so a single off-vocabulary or long-sentence move never fails the whole window; write_discourse_moves enforces the vocabulary (dead-letters a bad move_type, coerces an off-list status to NULL) and truncates the title. `supports` names the claim/thesis a premise/evidence/counterpoint backs (→ resolves_move_id edge, source_type='document').",
+      "items": {
+        "type": "object",
+        "required": ["move_type", "title", "detail", "status", "supports", "chunk_range"],
+        "additionalProperties": true,
+        "properties": {
+          "move_type": {"type": "string", "minLength": 1},
+          "title": {"type": "string", "minLength": 1},
+          "detail": {"type": ["string", "null"]},
+          "status": {"type": ["string", "null"]},
+          "supports": {"type": ["string", "null"]},
+          "chunk_range": {
+            "type": "array",
+            "items": {"type": "integer", "minimum": 0},
+            "minItems": 2, "maxItems": 2
+          }
+        }
+      }
+    }
+  }
+}

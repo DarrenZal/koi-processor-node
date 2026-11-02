@@ -1,0 +1,21 @@
+# Local configuration and secrets
+config/personal.env
+.env
+*.env
+!*.env.example
+# Personal choices copied from the *.example.yaml templates
+config/rss_feeds.yaml
+config/substack_publications.yaml
+
+# Python environments and caches
+venv/
+.venv/
+.venv-koinet/
+.venv*/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Logs
+logs/
+*.log

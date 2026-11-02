@@ -1,0 +1,331 @@
+{
+  "@context": {
+    "bkc": "http://bkc.regen.network/ontology#",
+    "schema": "http://schema.org/",
+    "skos": "http://www.w3.org/2004/02/skos/core#",
+    "dcterms": "http://purl.org/dc/terms/",
+    "rdfs": "http://www.w3.org/2000/01/rdf-schema#",
+    "owl": "http://www.w3.org/2002/07/owl#",
+    "xsd": "http://www.w3.org/2001/XMLSchema#",
+    "broader": { "@id": "skos:broader", "@type": "@id" },
+    "narrower": { "@id": "skos:narrower", "@type": "@id" },
+    "related_to": { "@id": "skos:related", "@type": "@id" }
+  },
+  "@graph": [
+    {
+      "@id": "http://bkc.regen.network/ontology",
+      "@type": "owl:Ontology",
+      "rdfs:label": "BKC Ontology",
+      "rdfs:comment": "Bioregional Knowledge Commoning ontology for Octo's knowledge graph",
+      "owl:versionInfo": "1.3.0",
+      "dcterms:created": { "@type": "xsd:date", "@value": "2026-02-08" },
+      "dcterms:modified": { "@type": "xsd:date", "@value": "2026-04-18" }
+    },
+
+    { "@id": "bkc:Practice", "@type": "owl:Class",
+      "rdfs:label": "Practice",
+      "rdfs:comment": "A bioregional-specific activity, approach, or way of doing things" },
+
+    { "@id": "bkc:Pattern", "@type": "owl:Class",
+      "rdfs:label": "Pattern",
+      "rdfs:subClassOf": { "@id": "skos:Concept" },
+      "rdfs:comment": "A trans-bioregional generalization emerging from aggregated practices" },
+
+    { "@id": "bkc:CaseStudy", "@type": "owl:Class",
+      "rdfs:label": "Case Study",
+      "rdfs:subClassOf": { "@id": "schema:CreativeWork" },
+      "rdfs:comment": "A documented real-world example of a practice or pattern" },
+
+    { "@id": "bkc:Bioregion", "@type": "owl:Class",
+      "rdfs:label": "Bioregion",
+      "rdfs:subClassOf": [{ "@id": "schema:Place" }, { "@id": "skos:Concept" }],
+      "rdfs:comment": "A named bioregion — both spatial and conceptual, defined by ecological and cultural boundaries" },
+
+    { "@id": "bkc:Protocol", "@type": "owl:Class",
+      "rdfs:label": "Protocol",
+      "rdfs:subClassOf": { "@id": "schema:CreativeWork" },
+      "rdfs:comment": "A general coordination pattern, not locality-specific" },
+
+    { "@id": "bkc:Playbook", "@type": "owl:Class",
+      "rdfs:label": "Playbook",
+      "rdfs:subClassOf": { "@id": "schema:CreativeWork" },
+      "rdfs:comment": "A local implementation of a protocol in a specific context" },
+
+    { "@id": "bkc:Question", "@type": "owl:Class",
+      "rdfs:label": "Question",
+      "rdfs:comment": "An inquiry or hypothesis driving investigation" },
+
+    { "@id": "bkc:Claim", "@type": "owl:Class",
+      "rdfs:label": "Claim",
+      "rdfs:comment": "An assertion or conclusion" },
+
+    { "@id": "bkc:Evidence", "@type": "owl:Class",
+      "rdfs:label": "Evidence",
+      "rdfs:comment": "Data, observations, or results" },
+
+    { "@id": "bkc:aggregates_into", "@type": "owl:ObjectProperty",
+      "rdfs:label": "aggregates into",
+      "rdfs:domain": { "@id": "bkc:Practice" },
+      "rdfs:range": { "@id": "bkc:Pattern" },
+      "rdfs:comment": "Observational: practices aggregate into patterns. NOT inverse of suggests." },
+
+    { "@id": "bkc:suggests", "@type": "owl:ObjectProperty",
+      "rdfs:label": "suggests",
+      "rdfs:domain": { "@id": "bkc:Pattern" },
+      "rdfs:range": { "@id": "bkc:Practice" },
+      "rdfs:comment": "Prescriptive: patterns suggest new practices. NOT inverse of aggregates_into." },
+
+    { "@id": "bkc:documents", "@type": "owl:ObjectProperty",
+      "rdfs:label": "documents",
+      "rdfs:domain": { "@id": "bkc:CaseStudy" },
+      "rdfs:range": { "@id": "bkc:Practice" },
+      "rdfs:comment": "CaseStudy documents a Practice or Pattern. Range also includes bkc:Pattern. Inverse alias: documentedBy (parser only, not stored)." },
+
+    { "@id": "bkc:practiced_in", "@type": "owl:ObjectProperty",
+      "rdfs:label": "practiced in",
+      "rdfs:subPropertyOf": { "@id": "schema:location" },
+      "rdfs:domain": { "@id": "bkc:Practice" },
+      "rdfs:range": { "@id": "bkc:Bioregion" } },
+
+    { "@id": "bkc:supports", "@type": "owl:ObjectProperty",
+      "rdfs:label": "supports",
+      "rdfs:range": { "@id": "bkc:Claim" } },
+
+    { "@id": "bkc:opposes", "@type": "owl:ObjectProperty",
+      "rdfs:label": "opposes",
+      "rdfs:range": { "@id": "bkc:Claim" } },
+
+    { "@id": "bkc:informs", "@type": "owl:ObjectProperty",
+      "rdfs:label": "informs" },
+
+    { "@id": "bkc:generates", "@type": "owl:ObjectProperty",
+      "rdfs:label": "generates" },
+
+    { "@id": "bkc:implemented_by", "@type": "owl:ObjectProperty",
+      "rdfs:label": "implemented by",
+      "rdfs:domain": { "@id": "bkc:Protocol" },
+      "rdfs:range": { "@id": "bkc:Playbook" },
+      "rdfs:comment": "Protocol implemented by Playbook. Inverse alias: implements (parser only, not stored)." },
+
+    { "@id": "bkc:synthesizes", "@type": "owl:ObjectProperty",
+      "rdfs:label": "synthesizes",
+      "rdfs:domain": { "@id": "bkc:Claim" },
+      "rdfs:range": { "@id": "bkc:Evidence" } },
+
+    { "@id": "bkc:about", "@type": "owl:ObjectProperty",
+      "rdfs:label": "about",
+      "rdfs:subPropertyOf": { "@id": "dcterms:subject" },
+      "rdfs:comment": "Grounds discourse nodes to domain entities" },
+
+    { "@id": "bkc:forked_from", "@type": "owl:ObjectProperty",
+      "rdfs:label": "forked from",
+      "rdfs:comment": "Hyphal lineage: branched from" },
+
+    { "@id": "bkc:builds_on", "@type": "owl:ObjectProperty",
+      "rdfs:label": "builds on",
+      "rdfs:comment": "Hyphal lineage: develops from" },
+
+    { "@id": "bkc:inspired_by", "@type": "owl:ObjectProperty",
+      "rdfs:label": "inspired by",
+      "rdfs:comment": "Hyphal lineage: conceptual inspiration" },
+
+    { "@id": "bkc:Outcome", "@type": "owl:Class",
+      "rdfs:label": "Outcome",
+      "rdfs:comment": "A desired end-state or goal on the project roadmap. Outcomes are delivered by Initiatives and WorkItems." },
+
+    { "@id": "bkc:Initiative", "@type": "owl:Class",
+      "rdfs:label": "Initiative",
+      "rdfs:comment": "A scoped body of work on the roadmap, containing multiple WorkItems and delivering to Outcomes or Milestones." },
+
+    { "@id": "bkc:WorkItem", "@type": "owl:Class",
+      "rdfs:label": "Work Item",
+      "rdfs:comment": "A concrete, assignable unit of work on the roadmap. WorkItems deliver to Outcomes or Milestones via Initiatives." },
+
+    { "@id": "bkc:Milestone", "@type": "owl:Class",
+      "rdfs:label": "Milestone",
+      "rdfs:comment": "A time-bound checkpoint on the roadmap marking significant progress or a deliverable gate." },
+
+    { "@id": "bkc:Decision", "@type": "owl:Class",
+      "rdfs:label": "Decision",
+      "rdfs:comment": "A recorded governance or architectural decision on the roadmap, with rationale and status." },
+
+    { "@id": "bkc:Risk", "@type": "owl:Class",
+      "rdfs:label": "Risk",
+      "rdfs:comment": "An identified threat or uncertainty on the roadmap that may block progress. Mitigated by WorkItems, Initiatives, or Decisions." },
+
+    { "@id": "bkc:Metric", "@type": "owl:Class",
+      "rdfs:label": "Metric",
+      "rdfs:comment": "A measurable indicator tracking progress toward an Outcome on the roadmap." },
+
+    { "@id": "bkc:depends_on", "@type": "owl:ObjectProperty",
+      "rdfs:label": "depends on",
+      "rdfs:domain": [{ "@id": "bkc:Outcome" }, { "@id": "bkc:Initiative" }, { "@id": "bkc:WorkItem" }, { "@id": "bkc:Milestone" }],
+      "rdfs:range": [{ "@id": "bkc:Outcome" }, { "@id": "bkc:Initiative" }, { "@id": "bkc:WorkItem" }, { "@id": "bkc:Milestone" }],
+      "rdfs:comment": "Roadmap dependency: node depends on completion of another node." },
+
+    { "@id": "bkc:delivers", "@type": "owl:ObjectProperty",
+      "rdfs:label": "delivers",
+      "rdfs:domain": [{ "@id": "bkc:WorkItem" }, { "@id": "bkc:Initiative" }],
+      "rdfs:range": [{ "@id": "bkc:Outcome" }, { "@id": "bkc:Milestone" }],
+      "rdfs:comment": "Roadmap contribution: work item or initiative delivers to an outcome or milestone." },
+
+    { "@id": "bkc:measures", "@type": "owl:ObjectProperty",
+      "rdfs:label": "measures",
+      "rdfs:domain": { "@id": "bkc:Metric" },
+      "rdfs:range": { "@id": "bkc:Outcome" },
+      "rdfs:comment": "Metric measures progress toward an outcome." },
+
+    { "@id": "bkc:mitigates", "@type": "owl:ObjectProperty",
+      "rdfs:label": "mitigates",
+      "rdfs:domain": [{ "@id": "bkc:WorkItem" }, { "@id": "bkc:Initiative" }, { "@id": "bkc:Decision" }],
+      "rdfs:range": { "@id": "bkc:Risk" },
+      "rdfs:comment": "Work or decision mitigates an identified risk." },
+
+    { "@id": "bkc:blocks", "@type": "owl:ObjectProperty",
+      "rdfs:label": "blocks",
+      "rdfs:domain": [{ "@id": "bkc:Risk" }, { "@id": "bkc:WorkItem" }, { "@id": "bkc:Initiative" }, { "@id": "bkc:Decision" }],
+      "rdfs:range": [{ "@id": "bkc:WorkItem" }, { "@id": "bkc:Initiative" }, { "@id": "bkc:Milestone" }],
+      "rdfs:comment": "Node blocks progress on another node." },
+
+    { "@id": "bkc:references", "@type": "owl:ObjectProperty",
+      "rdfs:label": "references",
+      "rdfs:comment": "General reference link between roadmap entities." },
+
+    { "@id": "bkc:Commitment", "@type": "owl:Class",
+      "rdfs:label": "Commitment",
+      "rdfs:comment": "A formal pledge by a Person or Organization to deliver goods, labor, or service. Analogous to a Community Asset Voucher (CAV) in the Sarafu/Grassroots Economics model. Has lifecycle states: PROPOSED → VERIFIED → ACTIVE → EVIDENCE_LINKED → REDEEMED (or REJECTED/WITHDRAWN/DISPUTED/RESOLVED)." },
+
+    { "@id": "bkc:CommitmentPool", "@type": "owl:Class",
+      "rdfs:label": "Commitment Pool",
+      "rdfs:comment": "An aggregation of commitments by a community or bioregion, enabling mutual pooling of capacity and obligations. Pools have threshold mechanics: once enough commitments are verified, the pool activates and commitments become routable economic signals." },
+
+    { "@id": "bkc:CommitmentAction", "@type": "owl:Class",
+      "rdfs:label": "Commitment Action",
+      "rdfs:comment": "A recorded act of fulfillment, partial or full, against a Commitment. Captures the Mweria cycle entry pattern — the act of delivering on a pledge within a commitment pool." },
+
+    { "@id": "bkc:pledges_commitment", "@type": "owl:ObjectProperty",
+      "rdfs:label": "pledges commitment",
+      "rdfs:domain": [{ "@id": "schema:Person" }, { "@id": "schema:Organization" }],
+      "rdfs:range": { "@id": "bkc:Commitment" },
+      "rdfs:comment": "Person or Organization makes a formal pledge encoded as a Commitment entity." },
+
+    { "@id": "bkc:aggregates_commitments", "@type": "owl:ObjectProperty",
+      "rdfs:label": "aggregates commitments",
+      "rdfs:domain": { "@id": "bkc:CommitmentPool" },
+      "rdfs:range": { "@id": "bkc:Commitment" },
+      "rdfs:comment": "CommitmentPool contains and aggregates individual pledges. Inverse alias: pooled_in (parser only, not stored)." },
+
+    { "@id": "bkc:proves_commitment", "@type": "owl:ObjectProperty",
+      "rdfs:label": "proves commitment",
+      "rdfs:domain": { "@id": "bkc:Evidence" },
+      "rdfs:range": { "@id": "bkc:Commitment" },
+      "rdfs:comment": "Evidence entity verifies fulfillment of a Commitment, transitioning it to EVIDENCE_LINKED state. Bridges the TBFF Evidence write-back loop with the commitment lifecycle." },
+
+    { "@id": "bkc:redeems_via", "@type": "owl:ObjectProperty",
+      "rdfs:label": "redeems via",
+      "rdfs:domain": { "@id": "bkc:Commitment" },
+      "rdfs:range": { "@id": "bkc:Evidence" },
+      "rdfs:comment": "Path from a pledge to its proof of fulfillment. A Commitment redeems_via an Evidence entity (or Hypercert once minted). Inverse of proves_commitment." },
+
+    { "@id": "bkc:governs_pool", "@type": "owl:ObjectProperty",
+      "rdfs:label": "governs pool",
+      "rdfs:domain": [{ "@id": "schema:Organization" }, { "@id": "bkc:Bioregion" }],
+      "rdfs:range": { "@id": "bkc:CommitmentPool" },
+      "rdfs:comment": "Organization or Bioregion entity responsible for stewarding a CommitmentPool. Maps to the Service Provider role in the Nondominium governance model." },
+
+    { "@id": "bkc:disputes", "@type": "owl:ObjectProperty",
+      "rdfs:label": "disputes",
+      "rdfs:domain": [{ "@id": "schema:Person" }, { "@id": "schema:Organization" }],
+      "rdfs:range": { "@id": "bkc:Commitment" },
+      "rdfs:comment": "Formal dispute entry against a Commitment. Transitions state to DISPUTED pending resolution. Implements the contestability requirement of Sangat-grade commitment infrastructure." },
+
+    { "@id": "schema:Person", "@type": "owl:Class",
+      "rdfs:label": "Person",
+      "rdfs:comment": "A natural person. Aliases the schema.org Person class." },
+
+    { "@id": "schema:Organization", "@type": "owl:Class",
+      "rdfs:label": "Organization",
+      "rdfs:comment": "An organization such as a nonprofit, company, or collective. Aliases the schema.org Organization class." },
+
+    { "@id": "schema:Project", "@type": "owl:Class",
+      "rdfs:label": "Project",
+      "rdfs:comment": "A named initiative or program of work. Aliases the schema.org Project class. Per BKC convention, site 'programs' map to Project with metadata.kind='program'." },
+
+    { "@id": "schema:Place", "@type": "owl:Class",
+      "rdfs:label": "Location",
+      "rdfs:comment": "A geographic location or place. Labelled 'Location' in the BKC type system; aliases schema:Place." },
+
+    { "@id": "skos:Concept", "@type": "owl:Class",
+      "rdfs:label": "Concept",
+      "rdfs:comment": "A unit of thought, used for topic-like entities. Aliases skos:Concept." },
+
+    { "@id": "schema:Meeting", "@type": "owl:Class",
+      "rdfs:label": "Meeting",
+      "rdfs:comment": "A documented meeting or gathering. Aliases the schema.org Meeting class." },
+
+    { "@id": "bkc:affiliated_with", "@type": "owl:ObjectProperty",
+      "rdfs:label": "affiliated with",
+      "rdfs:comment": "Person or sub-org is affiliated with an Organization (employment, membership, association)." },
+
+    { "@id": "bkc:attended", "@type": "owl:ObjectProperty",
+      "rdfs:label": "attended",
+      "rdfs:domain": { "@id": "schema:Person" },
+      "rdfs:range": { "@id": "schema:Meeting" },
+      "rdfs:comment": "Person was present at a Meeting." },
+
+    { "@id": "bkc:collaborates_with", "@type": "owl:ObjectProperty",
+      "rdfs:label": "collaborates with",
+      "rdfs:comment": "Two Organizations or People collaborate on shared work. Symmetric in practice." },
+
+    { "@id": "bkc:founded", "@type": "owl:ObjectProperty",
+      "rdfs:label": "founded",
+      "rdfs:domain": { "@id": "schema:Person" },
+      "rdfs:range": { "@id": "schema:Organization" },
+      "rdfs:comment": "Person founded an Organization. Inverse of has_founder." },
+
+    { "@id": "bkc:has_founder", "@type": "owl:ObjectProperty",
+      "rdfs:label": "has founder",
+      "rdfs:domain": { "@id": "schema:Organization" },
+      "rdfs:range": { "@id": "schema:Person" },
+      "rdfs:comment": "Organization has a founder Person. Inverse of founded." },
+
+    { "@id": "bkc:has_project", "@type": "owl:ObjectProperty",
+      "rdfs:label": "has project",
+      "rdfs:domain": { "@id": "schema:Organization" },
+      "rdfs:range": { "@id": "schema:Project" },
+      "rdfs:comment": "Organization stewards or runs a Project." },
+
+    { "@id": "bkc:involves_organization", "@type": "owl:ObjectProperty",
+      "rdfs:label": "involves organization",
+      "rdfs:range": { "@id": "schema:Organization" },
+      "rdfs:comment": "An event, project, or case involves an Organization in a non-ownership role." },
+
+    { "@id": "bkc:involves_person", "@type": "owl:ObjectProperty",
+      "rdfs:label": "involves person",
+      "rdfs:range": { "@id": "schema:Person" },
+      "rdfs:comment": "An event, project, or case involves a Person in a non-ownership role." },
+
+    { "@id": "bkc:knows", "@type": "owl:ObjectProperty",
+      "rdfs:label": "knows",
+      "rdfs:domain": { "@id": "schema:Person" },
+      "rdfs:range": { "@id": "schema:Person" },
+      "rdfs:comment": "Person knows another Person. Used sparingly; prefer affiliated_with or collaborates_with when more specific." },
+
+    { "@id": "bkc:located_in", "@type": "owl:ObjectProperty",
+      "rdfs:label": "located in",
+      "rdfs:range": { "@id": "schema:Place" },
+      "rdfs:comment": "Subject entity is located in a Place (geographic containment)." },
+
+    { "@id": "skos:broader", "@type": "owl:ObjectProperty",
+      "rdfs:label": "broader",
+      "rdfs:comment": "SKOS broader: the related concept has a broader meaning (Salish Sea broader Cascadia)." },
+
+    { "@id": "skos:narrower", "@type": "owl:ObjectProperty",
+      "rdfs:label": "narrower",
+      "rdfs:comment": "SKOS narrower: the related concept has a narrower meaning. Inverse of broader." },
+
+    { "@id": "skos:related", "@type": "owl:ObjectProperty",
+      "rdfs:label": "related to",
+      "rdfs:comment": "SKOS related: generic associative relation when no more specific predicate applies." }
+  ]
+}

@@ -1,0 +1,24 @@
+# Substack publications to ingest — PERSONAL config (template).
+#
+# Copy this to `config/substack_publications.yaml` (which is gitignored) and add
+# your own publications. The sensor code is generic; this file is the only place
+# that names specific publications, so forks configure their own without touching
+# code or committing personal choices to the repo.
+#
+# Override the path with $SUBSTACK_PUBLICATIONS_CONFIG if you keep it elsewhere.
+
+# Gmail inbox for the paid-post bridge (ingest_substack_from_gmail.py, not in the
+# public export), which reads full-content paid posts over IMAP. substack_sensor.py
+# does not read it. Omit it unless you run that bridge.
+gmail_user: you@example.com
+
+publications:
+  - feed_slug: exampleauthor            # RID namespace: substack-corpus:<feed_slug>:<post_slug>
+    base: https://exampleauthor.substack.com
+    author: Example Author              # linked as a Person entity
+    domain: commons                     # free-form bucket tag
+    tags: [substack, example-author]
+    # email_sender: the From address of this publication's post emails. Set it to
+    # let the Gmail bridge capture PAID posts (which the public API skips). Omit
+    # for free-only publications.
+    email_sender: exampleauthor@substack.com

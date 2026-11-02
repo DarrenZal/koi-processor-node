@@ -1,0 +1,6 @@
+# Test-only. Install into a separate venv; koi-net is NOT a runtime dependency.
+# koi-net 2.1.2 uses PEP 695 `type` statements, so it imports only on Python >= 3.12.
+# Its package metadata declares Requires-Python >= 3.10.
+koi-net==2.1.2
+rid-lib==3.3.0
+pytest==9.2.0

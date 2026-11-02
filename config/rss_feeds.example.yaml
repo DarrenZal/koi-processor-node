@@ -1,0 +1,21 @@
+# RSS/Atom feeds to poll — PERSONAL config (template).
+#
+# Copy this to `config/rss_feeds.yaml` (which is gitignored) and list your own
+# feeds. The sensor code is generic; which feeds you follow is a personal choice,
+# so it is not committed to this fork-and-use repo. If no personal file exists,
+# the sensor falls back to this example.
+#
+# Override the path with `--feeds-file /some/path.yaml`.
+
+feeds:
+  - url: https://example.com/blog/feed.xml
+    slug: example-blog          # used in the item RID; keep it short + stable
+    domain: general             # free-form bucket tag
+    tags: [example, blog]
+    enabled: true
+
+  - url: https://another.example.org/atom.xml
+    slug: another-example
+    domain: general
+    tags: [example]
+    enabled: false              # set true to poll it

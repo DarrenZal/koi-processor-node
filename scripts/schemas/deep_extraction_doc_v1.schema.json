@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "deep_extraction_doc_v1",
+  "title": "Deep Document Extraction v1.0.0 (Phase 1: entities + facts)",
+  "description": "Per-window output schema for document deep-extraction. Mirrored inline in scripts/prompts/deep_extraction_doc_v1.md. Coordinates are GLOBAL RAG-chunk indices (windows carry global [N] labels; no offset). Phase 1 extracts entities + facts only; the discourse layer is added in Phase 3.",
+  "type": "object",
+  "required": ["document", "entities", "facts"],
+  "additionalProperties": true,
+  "properties": {
+    "document": {
+      "type": "object",
+      "required": ["name", "summary", "doc_kind", "chunk_span"],
+      "additionalProperties": true,
+      "properties": {
+        "name": {"type": "string", "minLength": 1, "maxLength": 200},
+        "summary": {"type": "string"},
+        "doc_kind": {"enum": ["whitepaper", "paper", "report", "essay", "spec", "book", "manual", "textbook", "handbook", "other"]},
+        "chunk_span": {
+          "type": "array",
+          "items": {"type": "integer", "minimum": 0},
+          "minItems": 2, "maxItems": 2,
+          "description": "Global [first, last] chunk index this window covers."
+        }
+      }
+    },
+    "entities": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "type", "first_seen_chunk", "mention_count"],
+        "additionalProperties": true,
+        "properties": {
+          "name": {"type": "string"},
+          "type": {"enum": ["Person", "Organization", "Project", "Concept", "Location", "Protocol", "CaseStudy", "Document", "Event"]},
+          "first_seen_chunk": {"type": "integer", "minimum": 0},
+          "mention_count": {"type": "integer", "minimum": 1}
+        }
+      }
+    },
+    "facts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["subject", "predicate", "object", "object_literal", "fact_text", "chunk_range", "confidence"],
+        "additionalProperties": true,
+        "properties": {
+          "subject": {"type": "string"},
+          "predicate": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]*$"},
+          "object": {"type": ["string", "null"]},
+          "object_literal": {"type": ["string", "null"]},
+          "fact_text": {"type": "string"},
+          "chunk_range": {
+            "type": "array",
+            "items": {"type": "integer", "minimum": 0},
+            "minItems": 2, "maxItems": 2
+          },
+          "confidence": {"enum": ["high", "medium", "low"]}
+        }
+      }
+    }
+  }
+}

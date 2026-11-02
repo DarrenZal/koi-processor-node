@@ -1,0 +1,21 @@
+-- =============================================================================
+-- Migration 139: v_daily_content is no longer readable by every role
+-- =============================================================================
+-- Apply:    psql -d personal_koi -v ON_ERROR_STOP=1 -1 -f migrations/139_revoke_v_daily_content_public.sql
+-- Then:     scripts/sql_ro_role.py --admin-dsn <superuser DSN> --verify   (must report 53/53)
+-- Rollback: none. The down file does not restore the grant (see it).
+--
+-- Date: 2026-10-30
+-- Record: an internal planning document (F10)
+--
+-- Why: migration 004 ran GRANT SELECT ON v_daily_content TO PUBLIC. The view returns every live
+-- koi_memories row, private ones included, with content and metadata, so any role that can connect
+-- could read them. That included salishsee_reader, a non-superuser login role, and koi_sql_ro, the /sql
+-- read role, beyond its allowlist. The REVOKE was applied by hand on personal_koi at 2026-10-30 01:45:46
+-- PDT. This file keeps it in force on a fresh build, where 004 runs first. Re-running 004 by itself
+-- restores the grant, so run the role verification after any migration run.
+--
+-- No code reads v_daily_content. The service and the sensors connect as the owner, which keeps access.
+-- Idempotent: revoking a privilege that is not granted is a no-op.
+
+REVOKE SELECT ON v_daily_content FROM PUBLIC;
