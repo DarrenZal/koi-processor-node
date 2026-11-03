@@ -78,7 +78,7 @@ class TerminusDBAdapter:
             elif "schemacheck" in err or "unknown_property" in err:
                 logger.error(
                     "TerminusDB schema incompatible — existing data uses old field names. "
-                    "Run: python -m scripts.terminusdb.import_from_postgres --fresh"
+                    "Run: python -m scripts.terminusdb.import_from_postgres --apply --fresh --confirm-destructive"
                 )
                 self._schema_ok = False
             else:
@@ -90,7 +90,7 @@ class TerminusDBAdapter:
         if not getattr(self, '_schema_ok', True):
             raise RuntimeError(
                 "TerminusDB schema incompatible. "
-                "Run: python -m scripts.terminusdb.import_from_postgres --fresh"
+                "Run: python -m scripts.terminusdb.import_from_postgres --apply --fresh --confirm-destructive"
             )
 
     # --- Idempotent upserts (called by outbox worker) ---
@@ -272,7 +272,7 @@ class TerminusDBAdapter:
             if not getattr(self, '_schema_ok', True):
                 result["schema_error"] = (
                     "Schema incompatible — run: "
-                    "python -m scripts.terminusdb.import_from_postgres --fresh"
+                    "python -m scripts.terminusdb.import_from_postgres --apply --fresh --confirm-destructive"
                 )
             return result
         except Exception as e:

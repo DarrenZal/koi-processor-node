@@ -20,7 +20,7 @@ Prevents duplicate content from appearing in search results:
 - Groups identical content, keeps highest-scoring instance
 - Safety net for historical duplicates
 
-**Storage-Level (`src/core/koi_event_bridge_v2.py` (not in this export)):**
+**Storage-Level (`src/core/koi_event_bridge_v2.py`):**
 - `content_hash` column (SHA-256) on koi_memories
 - Global check: rejects new entries if content_hash already exists
 - Catches cross-RID duplicates from sensors
@@ -216,7 +216,7 @@ Set `DEBUG_GRAPH_EXPANSION=true` in `ecosystem.hybrid.config.js`
 - koi-query-api.ts - Main API with entity search, keyword search, content dedup, graph expansion
 - adaptive-features.ts - Fusion algorithms, RID normalization
 - tests/adaptive-features.test.ts - Unit tests for fusion
-- src/core/koi_event_bridge_v2.py (not in this export) - Storage-level dedup
+- src/core/koi_event_bridge_v2.py - Storage-level dedup
 - scripts/archive/entity_chunk_linker.py (not in this export) - Batch entity linking
 - scripts/backfill_entity_registry.py (not in this export) - Registry population
 - scripts/backfill-fts.sql - FTS backfill script

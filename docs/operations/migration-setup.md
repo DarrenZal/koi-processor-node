@@ -43,7 +43,8 @@ the runner at its Step 5 and stops there on that exit. It does not pass its `DB_
 settings to the runner, which reads only `DATABASE_URL` and otherwise defaults to `eliza`
 on localhost:5433.
 
-`scripts/run_migrations_with_backup.sh` (not in this export) does the same after taking a `pg_dump` backup.
+`scripts/run_migrations_with_backup.sh --apply` does the same after taking a `pg_dump` backup
+(without `--apply` it is a dry run that runs only read-only queries).
 Both refuse databases that track migrations in `koi_migrations` (unless
 `KOI_ALLOW_LEGACY_RUNNER=1`) or `koi_schema_migrations`.
 

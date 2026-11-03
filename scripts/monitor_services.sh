@@ -56,7 +56,7 @@ fi
 if systemctl is-active --quiet koi-bridge; then
     echo -e "${GREEN}✓${NC} koi-bridge systemd service is active"
 else
-    # Check if running as process: src/core/koi_event_bridge_v2.py (not in this export)
+    # Check if running as process
     if pgrep -f "koi_event_bridge_v2.py" > /dev/null; then
         echo -e "${YELLOW}⚠${NC} Event Bridge running as process (not systemd)"
     else

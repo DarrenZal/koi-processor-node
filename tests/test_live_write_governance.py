@@ -154,6 +154,12 @@ KNOWN_UNGOVERNED: dict[str, str] = {
         "Same shape: one POST site at :50-58, to /entity/resolve, non-persisting "
         "for the same reason as tests/test_contract.py."
     ),
+    # --- Safe: nothing leaves the process ----------------------------------
+    "tests/test_receipt_and_validation_cli.py": (
+        "Its POSTs go to httpx.MockTransport handlers and a stub `requests` object "
+        "in-process; the `blocked` fixture refuses every socket and database connect, "
+        "and the database writes it checks go to fake asyncpg connections."
+    ),
 }
 
 

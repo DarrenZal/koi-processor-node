@@ -539,7 +539,7 @@ def main():
     cons_path = os.getenv("CONSOLIDATION_PATH", "final_consolidation_all_t0.30.json")
     if not os.path.exists(cons_path):
         print(f"ERROR: Consolidation file not found at {cons_path}!")
-        print("Run consolidate_predicates_final.py (use --full -t 0.25 for t=0.25 all) and set CONSOLIDATION_PATH accordingly.")
+        print("Run consolidate_predicates_final.py --apply (use --full -t 0.25 for t=0.25 all) and set CONSOLIDATION_PATH accordingly.")
         return
 
     # Create refiner

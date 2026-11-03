@@ -16,6 +16,12 @@ Phase 0a Step 3: Single-Instance Branch/Merge Tests
 Not a pytest module: run it as `python -m scripts.terminusdb.test_merge` against a
 throwaway TerminusDB container (run_phase0.sh does). It needs the terminusdb-client
 package, which requirements.txt does not install.
+
+The tests create, use and delete their own database, koi_merge_test, and append to
+results.json next to this file. With --import-first they first run the Postgres to
+TerminusDB import (scripts.terminusdb.import_from_postgres), which reads POSTGRES_URL and
+writes TERMINUSDB_DB (default koi_knowledge_graph); run_phase0.sh --apply passes it.
+--help and --dry-run exit before anything is imported or contacted.
 """
 
 # pytest skips a module whose __test__ is False (see also this directory's conftest.py).
@@ -28,6 +34,37 @@ import time
 import traceback
 from datetime import datetime, timezone
 from pathlib import Path
+
+
+def _parse_args(argv=None):
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        description="Phase 0a single-instance branch/merge tests. They create, use and delete "
+                    "their own TerminusDB database koi_merge_test at TERMINUSDB_URL (default "
+                    "http://127.0.0.1:6363/) and append to scripts/terminusdb/results.json.")
+    parser.add_argument("--import-first", action="store_true",
+                        help="first run the Postgres to TerminusDB import, which reads "
+                             "POSTGRES_URL and writes TERMINUSDB_DB (default "
+                             "koi_knowledge_graph), and include its metrics; run_phase0.sh "
+                             "--apply passes this")
+    parser.add_argument("--dry-run", action="store_true",
+                        help="print what would run and exit")
+    return parser.parse_args(argv)
+
+
+if __name__ == "__main__":
+    # Parse first, so --help and --dry-run need no optional package and contact nothing.
+    _ARGS = _parse_args()
+    if _ARGS.dry_run:
+        print("Dry run: nothing is imported or contacted.")
+        if _ARGS.import_first:
+            print("  Would run the Postgres to TerminusDB import into TERMINUSDB_DB "
+                  f"({os.environ.get('TERMINUSDB_DB', 'koi_knowledge_graph')})")
+        print("  Would create, use and delete the TerminusDB database koi_merge_test at "
+              f"{os.environ.get('TERMINUSDB_URL', 'http://127.0.0.1:6363/')}")
+        print(f"  Would append to {Path(__file__).parent / 'results.json'}")
+        sys.exit(0)
 
 from terminusdb_client import WOQLClient
 
@@ -727,15 +764,17 @@ def save_results(import_metrics: dict | None, test_metrics: dict):
 
 
 if __name__ == "__main__":
-    # Try to load import metrics if available
     import_metrics = None
-    try:
-        from scripts.terminusdb.import_from_postgres import run_import
-        print("Running import first...")
-        import_metrics = run_import()
-    except Exception as e:
-        print(f"Import skipped or failed: {e}")
-        print("Running merge tests standalone...\n")
+    if _ARGS.import_first:
+        try:
+            from scripts.terminusdb.import_from_postgres import run_import
+            print("Running import first...")
+            import_metrics = run_import()
+        except Exception as e:
+            print(f"Import skipped or failed: {e}")
+            print("Running merge tests standalone...\n")
+    else:
+        print("Running merge tests standalone (pass --import-first to run the import first)...\n")
 
     test_metrics = run_tests()
     save_results(import_metrics, test_metrics)

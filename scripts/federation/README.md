@@ -135,10 +135,84 @@ should fail. On the node, `sudo pfctl -s info` shows whether pf is enabled and
 
 ## Vault Sync Smoke Test
 
-The vault-sync smoke test, `scripts/federation/smoke-vault-sync.sh` (not in this export), is
-left out: it runs against a live node and its database, configures vault sync without
-reverting it, writes a test note into the vault and deletes a second peer, with no test
-guard.
+After both peers have vault sync enabled (`VAULT_SYNC_ENABLED=true` in `config/personal.env`) and the `Shared/` folder exists, run the two-mode smoke test.
+
+### Exact commands (two-node example)
+
+```bash
+# Pass 1: watcher disabled (isolate poll-based path)
+KOI_ADMIN_TOKEN=<local-token> \
+  PEER_KOI_ADMIN_TOKEN=<peer-token> \
+  VAULT_SYNC_WATCHER=false \
+  MODE=two-peer \
+  PEER_SSH=<user>@<peer-host> \
+  PEER_NAME=<peer-name> \
+  KOI_TEST_ALLOW_LIVE=1 KOI_TEST_API_URL=http://localhost:8351 \
+  KOI_TEST_DATABASE_URL=postgresql:///personal_koi VAULT_PATH=<this node's vault> \
+  PEER_VAULT_PATH=<the peer's vault> \
+  bash scripts/federation/smoke-vault-sync.sh --apply
+# Expect: 15/15
+
+# Pass 2: watcher enabled (default)
+KOI_ADMIN_TOKEN=<local-token> \
+  PEER_KOI_ADMIN_TOKEN=<peer-token> \
+  MODE=two-peer \
+  PEER_SSH=<user>@<peer-host> \
+  PEER_NAME=<peer-name> \
+  KOI_TEST_ALLOW_LIVE=1 KOI_TEST_API_URL=http://localhost:8351 \
+  KOI_TEST_DATABASE_URL=postgresql:///personal_koi VAULT_PATH=<this node's vault> \
+  PEER_VAULT_PATH=<the peer's vault> \
+  bash scripts/federation/smoke-vault-sync.sh --apply
+# Expect: 15/15
+```
+
+### General usage
+
+```bash
+# Local mode (single node, no peer needed):
+KOI_ADMIN_TOKEN=<token> PEER_NAME=<peer-alias> \
+  KOI_TEST_ALLOW_LIVE=1 KOI_TEST_API_URL=http://localhost:8351 \
+  KOI_TEST_DATABASE_URL=postgresql:///personal_koi VAULT_PATH=<this node's vault> \
+  bash scripts/federation/smoke-vault-sync.sh --apply
+
+# Two-peer mode (requires SSH to peer):
+KOI_ADMIN_TOKEN=<local-token> \
+  MODE=two-peer \
+  PEER_NAME=<peer-alias> \
+  PEER_SSH=<user>@<peer-ip> \
+  PEER_KOI_ADMIN_TOKEN=<peer-token> \
+  KOI_TEST_ALLOW_LIVE=1 KOI_TEST_API_URL=http://localhost:8351 \
+  KOI_TEST_DATABASE_URL=postgresql:///personal_koi VAULT_PATH=<this node's vault> \
+  PEER_VAULT_PATH=<the peer's vault> \
+  bash scripts/federation/smoke-vault-sync.sh --apply
+```
+
+Note: `PEER_NAME`, `VAULT_PATH` and, in two-peer mode, `PEER_SSH` and `PEER_VAULT_PATH`
+have no default, and without `--apply` the script only prints its plan. `--apply` runs
+only if `KOI_TEST_API_URL` and `KOI_TEST_DATABASE_URL` pass the test-target guard
+(`KOI_TEST_ALLOW_LIVE=1` on a live node). On exit it restores the `vault_sync_peers` rows it
+changed. A `~` in `PEER_VAULT_PATH` expands on the remote shell via unquoted SSH paths
+(fixed in `5ddd839e`).
+
+### Recommended gate sequence
+
+1. Run `MODE=local` on node A.
+2. Run `MODE=local` on node B.
+3. Run `MODE=two-peer` from A -> B.
+4. Run `MODE=two-peer` from B -> A.
+5. Proceed only if all runs end with `FAIL: 0` and no increase in `rejected_events`.
+
+### Prerequisites
+
+- Migrations 049 + 050 applied on both nodes
+- `VAULT_SYNC_ENABLED=true` in both nodes' `config/personal.env`
+- `watchdog>=4.0.0` installed in venv
+- `Shared/` folder exists in both vaults
+- Handshake refreshed so edge `rid_types` includes `Vault-file`
+- API running on both nodes
+- Admin tokens accessible (env var or `$KOI_STATE_DIR/admin_token`)
+
+The smoke test validates: configure, file create/track, peer arrival, conflict detection, delete/tombstone, peer delete propagation, and no rejected events.
 
 ## Soak Monitoring
 

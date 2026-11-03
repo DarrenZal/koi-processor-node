@@ -148,7 +148,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Receives push events and triggers code extraction
   - Environment-configurable paths (CODE_GRAPH_BASE_PATH, REGEN_REPOS_PATH)
 
-- **Phonetic Code Backfill** - `scripts/backfill_phonetic_codes.py` (not in this export)
+- **Phonetic Code Backfill** - `scripts/backfill_phonetic_codes.py`
   - Utility to populate phonetic_code for schema-enabled entity types
   - Supports per-type stopwords and idempotent execution
 
@@ -166,14 +166,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Weekly Digest Stale Cache** - Date-range aware caching for `/api/koi/weekly-digest`
   - Root cause: Cache lookup ignored `start_date`/`end_date` params, returning 6+ day old digests
   - Fix: Cache filename now includes date range (`weekly_digest_{start}_to_{end}.md`)
-  - Affected files: `content_dashboard.py` (not in this export), `weekly_curator_llm.py` (not in this export)
+  - Affected files: `content_dashboard.py` (not in this export), `weekly_curator_llm.py`
 
 - **Event Bridge Routing** - Forwarder now targets correct endpoint
   - Root cause: Forwarder posted to semantic bridge (port 8004) instead of v2 bridge (port 8100)
   - Fix: `EVENT_BRIDGE_URL=http://localhost:8100`, `EVENT_BRIDGE_ENDPOINT=/process-koi-event`
 
 - **Fuseki Provenance 401** - Added Basic Auth support for provenance writes
-  - Root cause: `provenance_to_rdf.py` (not in this export) didn't authenticate with Fuseki
+  - Root cause: `provenance_to_rdf.py` didn't authenticate with Fuseki
   - Fix: Added `FUSEKI_USER`/`FUSEKI_PASSWORD` env var support
   - Runbook: `docs/runbook-fuseki-provenance.md` (not in this export)
 
@@ -392,7 +392,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - **Daily Curator** - Now uses `daily_curator_llm.py` with OpenAI integration
-- **Weekly Curator** - Now uses `weekly_curator_llm.py` (not in this export) with comprehensive ledger data
+- **Weekly Curator** - Now uses `weekly_curator_llm.py` with comprehensive ledger data
 - **Dashboard Timeout** - Increased subprocess timeout from 180s to 300s
 
 ## [2.0.0] - 2025-09-09
@@ -401,7 +401,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **RID-based Deduplication System** - Prevents duplicate content ingestion using Resource Identifiers
 - **Version Control for Updates** - UPDATE events create new versions with full audit trail
 - **Isolated KOI Tables** - New `koi_memories` and `koi_embeddings` tables separate sensor data from scraped content
-- **Event Bridge v2** (`koi_event_bridge_v2.py` (not in this export)) - Complete rewrite with deduplication and versioning
+- **Event Bridge v2** (`koi_event_bridge_v2.py`) - Complete rewrite with deduplication and versioning
 - **Database Migration 003** - Creates isolated tables with version tracking
 - **Comprehensive Documentation** - Complete README with installation, configuration, and troubleshooting
 - **Setup Script** (`scripts/setup.sh`) - Automated environment setup
@@ -472,7 +472,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
    - Review new options in .env.example
 
 3. **Code Changes**
-   - Replace `koi_event_bridge.py` with `koi_event_bridge_v2.py` (not in this export)
+   - Replace `koi_event_bridge.py` with `koi_event_bridge_v2.py`
    - Update any custom integrations to handle version fields in responses
 
 4. **Testing**

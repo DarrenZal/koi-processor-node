@@ -63,7 +63,7 @@ GRAPH_NAME=regen_graph
 CODE_GRAPH_REPOS=regen-ledger,regen-web,regen-data-standards,koi-sensors,koi-processor,koi-research,regen-koi-mcp
 ```
 
-### 3. Event Forwarder (`scripts/coordinator_to_eventbridge_forwarder.py` (not in this export))
+### 3. Event Forwarder (`scripts/coordinator_to_eventbridge_forwarder.py`)
 
 Updated to forward events to both services in parallel:
 

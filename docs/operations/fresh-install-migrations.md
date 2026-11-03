@@ -50,7 +50,7 @@ No runner applies migrations to an existing personal database:
 - `scripts/run_migrations.sh` refuses a `personal_koi` that is not empty. For other
   databases it refuses `koi_migrations` (bypass: `KOI_ALLOW_LEGACY_RUNNER=1`) and
   `koi_schema_migrations` (no bypass).
-- `scripts/run_migrations_with_backup.sh` (not in this export) refuses any database named `personal_koi`, and
+- `scripts/run_migrations_with_backup.sh` refuses any database named `personal_koi`, and
   refuses `koi_migrations` (bypass: `KOI_ALLOW_LEGACY_RUNNER=1`) and `koi_schema_migrations`
   (no bypass).
 - `scripts/federation/lib.sh` (used by `setup-node.sh`) migrates
@@ -98,7 +98,7 @@ file that fails outright.
   psql older than 10, which does not know `\if`, stops instead of running the body. The
   other runners skip them: `scripts/run_migrations.sh` outside the personal profile,
   `scripts/federation/lib.sh` (it applies files with psycopg2, which cannot run their psql
-  meta-commands), and `scripts/run_migrations_with_backup.sh` (not in this export) in every case.
+  meta-commands), and `scripts/run_migrations_with_backup.sh` in every case.
 
 | File | Why |
 |---|---|
@@ -134,5 +134,5 @@ A new database built by the previous runner (all files applied, errors and all) 
 compared with one built by the personal profile. Every object the profile no longer
 creates either has no users in `api/`, `src/` or `scripts/`, or is used only by
 RegenAI-stack modules that the personal API does not import
-(`src/core/koi_permissions_api.py`, `src/cat/cat_receipt_chain_v2.py` (not in this export)). `entity_registry.aliases` is now TEXT[], as on
+(`src/core/koi_permissions_api.py`, `src/cat/cat_receipt_chain_v2.py`). `entity_registry.aliases` is now TEXT[], as on
 live databases, instead of JSONB.

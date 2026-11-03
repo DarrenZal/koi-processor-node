@@ -13,7 +13,7 @@ The KOI (Knowledge Organization Infrastructure) Processor is a distributed syste
 
 ## Core Components
 
-### 1. Event Bridge v2 (`src/core/koi_event_bridge_v2.py` (not in this export))
+### 1. Event Bridge v2 (`src/core/koi_event_bridge_v2.py`)
 
 The central processing hub that:
 - Receives events from KOI sensors
@@ -347,13 +347,11 @@ cp .env.example .env
 
 # Run services (from the repository root; each script imports its siblings in src/core)
 python src/core/bge_server.py &
+python src/core/koi_event_bridge_v2.py &
 
 # Test
 pytest -rs tests/
 ```
-
-The event bridge, `src/core/koi_event_bridge_v2.py` (not in this export), is left out:
-it imports `src/core/provenance_to_rdf.py` (not in this export) at module level.
 
 ### 2. Testing Strategy
 - Unit tests for deduplication logic

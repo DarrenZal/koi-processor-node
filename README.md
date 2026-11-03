@@ -8,40 +8,44 @@
 > it applies to build a new `personal_koi` database, an example configuration, and the
 > document ingest and deep-extraction scripts the service loads. Since the wide review of
 > 2026-11-02 it also carries most of the rest of the development repository as it stands:
-> the code of the older RegenAI event-bridge stack (most of `src/`, without its two
-> event-bridge services and the held scripts listed below, the TypeScript query API
-> `koi-query-api.ts`, and the content, podcast and dashboard tooling), the GitHub
-> repository sensor and its code-graph extractor, the parked TerminusDB mirror, the
-> cross-source discourse discovery worker and review tools, the federation onboarding
-> scripts, the sensor, re-embedding, repair, audit and migration tools under `scripts/`,
-> down, rollback and draft migrations with the per-database baselines, the architecture,
-> integration and operations docs, and most of the test suite, much of which needs a
-> database or a running API. Many of these files need packages that `requirements.txt`
-> does not list (see "Python version and optional packages" below), or a database a fresh
-> install does not create (the RegenAI stack's `eliza` database, Apache AGE), so they are
-> published for reading and reuse rather than as part of the node. Still held in the
-> private repository: agent instructions and work orders; run outputs, reports, evaluation
-> results and generated data; archives; deployment files, runbooks and scripts for the
-> maintainer's own machines and servers (backups, scheduled jobs, cron installers, service
-> wrappers and the files that hard-code that layout); memos and records about people;
-> Regen's claims documents and ledger deploy scripts; client and engagement material (an
-> export for one client, seed data and an evaluation set for specific engagements);
-> one-off cleanup, audit and evaluation scripts written for the Regen team database; files
-> that, run with no arguments, with `--help` or with `--dry-run`, delete, clear or
-> overwrite data in a database, triple store or vault, write to a database not named on
-> the command line, post to, poll or acknowledge a running service's API or event queue,
-> anchor on a chain, or start paid API calls with no default cap, and scripts whose dry
-> run commits; the scripts that generate Regen's weekly podcast and its map; the Apache
-> AGE code-graph analysis scripts; the original content dashboard and the templates only
-> it renders; operational notes, measurements and benchmarks from the maintainer's own
-> nodes, and stale runbooks; files that cannot run here (imports of missing or held
-> modules, scripts that run held scripts, stubs); and the tests and fixtures that need
-> held code or data, describe the maintainer's own nodes and data, or copy a third-party
-> web page. The vault and session ingesters and the `pageindex` search tool are not in
-> this export, so unified search's vault and session surfaces return nothing. Some kept
-> files act when run with no arguments, by design. The sensors and their scheduled
-> wrappers ingest into the configured node. Three scheduled jobs write to the configured
-> database and may call the node's API: `scripts/run_embedding_repair.sh` (through
+> the code of the older RegenAI event-bridge stack (most of `src/`, its two event-bridge
+> services included, the TypeScript query API `koi-query-api.ts`, and the content, podcast
+> and dashboard tooling), the GitHub repository sensor and its code-graph extractor, the
+> parked TerminusDB mirror, the cross-source discourse discovery worker and review tools,
+> the federation onboarding scripts, the sensor, re-embedding, repair, audit and migration
+> tools under `scripts/`, down, rollback and draft migrations with the per-database
+> baselines, the architecture, integration and operations docs, and most of the test
+> suite, much of which needs a database or a running API. Many of these files need
+> packages that `requirements.txt` does not list (see "Python version and optional
+> packages" below), or a database a fresh install does not create (the RegenAI stack's
+> `eliza` database, Apache AGE), so they are published for reading and reuse rather than
+> as part of the node. Still held in the private repository: agent instructions and work
+> orders; run outputs, reports, evaluation results and generated data; archives;
+> deployment files, runbooks and scripts for the maintainer's own machines and servers
+> (backups, scheduled jobs, cron installers, service wrappers and the files that hard-code
+> that layout); memos and records about people; Regen's claims documents and ledger deploy
+> scripts; client and engagement material (an export for one client, seed data and an
+> evaluation set for specific engagements); one-off cleanup, audit and evaluation scripts
+> written for the Regen team database; files that, run with no arguments, with `--help` or
+> with `--dry-run`, delete, clear or overwrite data in a database, triple store or vault,
+> write to a database not named on the command line, post to, poll or acknowledge a
+> running service's API or event queue, anchor on a chain, or start paid API calls with no
+> default cap, and scripts whose dry run commits; the scripts that generate Regen's weekly
+> podcast and its map; the Apache AGE code-graph analysis scripts; the original content
+> dashboard and the templates only it renders; operational notes, measurements and
+> benchmarks from the maintainer's own nodes, and stale runbooks; files that cannot run
+> here (imports of missing or held modules, scripts that run held scripts, stubs); and the
+> tests and fixtures that need held code or data, describe the maintainer's own nodes and
+> data, or copy a third-party web page. The vault and session ingesters and the
+> `pageindex` search tool are not in this export, so unified search's vault and session
+> surfaces return nothing. Scripts that were held until 2026-11-02 because a run with no
+> arguments, `--help` or `--dry-run` changed data, called a running service or started
+> paid calls now default to a dry run and act only with an explicit `--apply`, or the flag
+> their `--help` names (`--run` for the loops and workers, `--apply --confirm-destructive`
+> for those that drop, clear or delete a whole store). Some kept files act when run with
+> no arguments, by design. The sensors and their scheduled wrappers ingest into the
+> configured node. Three scheduled jobs write to the configured database and may call the
+> node's API: `scripts/run_embedding_repair.sh` (through
 > `scripts/backfill_null_embeddings.py`, which re-embeds at most 500 rows per surface with
 > a cost limit and can file a task on the node's task API when a backlog persists),
 > `scripts/deep_extract_substack_corpus.sh` (deep extraction of every pending Substack
@@ -96,7 +100,7 @@ event-bridge stack, which has no quickstart here; only older architecture docume
 > | Embeddings | OpenAI `text-embedding-3-large` (3072-dim) | BGE `bge-large-en-v1.5` (1024-dim) via `src/core/bge_server.py` |
 >
 > This README and the personal-KOI quickstart describe the first. Older documents that
-> mention `bge_server.py`, `koi_event_bridge_v2.py` (not in this export), `eliza` or ports 8090/8100 describe the
+> mention `bge_server.py`, `koi_event_bridge_v2.py`, `eliza` or ports 8090/8100 describe the
 > second.
 
 ## Quick start
@@ -138,9 +142,9 @@ sensors → ingest/resolve/embed → PostgreSQL (+pgvector)  → hybrid RAG + gr
 api/            FastAPI backend (personal_ingest_api, routers/, graph_queries, embedding_provider)
 scripts/        ingest and deep extraction, the migration runner, sensors, import, repair,
                 re-embedding and federation tools, the parked TerminusDB mirror
-src/            the RegenAI event-bridge stack: src/core (bge_server.py and most other services;
-                its two event-bridge services and some scripts are not in this export), extraction,
-                knowledge-graph post-processing, content and podcast tooling
+src/            the RegenAI event-bridge stack: src/core (bge_server.py, the two event-bridge
+                services and the other services), extraction, knowledge-graph post-processing,
+                content and podcast tooling (a few of its scripts are not in this export)
 config/         *.example configuration templates (see config/README.md) and the stack's settings
 migrations/     forward migrations, down and rollback files, baselines/ per-database manifests
 docs/           quickstart, operations, architecture, integration and spec docs, conformance register
@@ -306,10 +310,11 @@ allows the download
 them offline, run them once with network, `KOI_TEST_TIKTOKEN_DOWNLOAD=1` and
 `TIKTOKEN_CACHE_DIR` set to a directory you keep, then set the same `TIKTOKEN_CACHE_DIR`
 for offline runs. The rest run offline. Measured 2026-11-02 on a build of this export
-(2,436 tests) with no network, a new `HOME` and temporary directory and no encodings
-cached: 1,490 passed, 946 skipped, the ten `tiktoken` tests among the skips. In that
-venv the conformance module skips too, because koi-net is not installed there; it runs from
-its own venv against a throwaway node you start, as
+(2,780 tests) with no network, a new `HOME` and temporary directory and no encodings
+cached: 1,830 passed, 950 skipped, the ten `tiktoken` tests among the skips. Three
+event-bridge tests skip there without `rdflib`, and one check of a file that is not in
+this export skips. In that venv the conformance module skips too, because koi-net is not
+installed there; it runs from its own venv against a throwaway node you start, as
 [`tests/conformance/README.md`](tests/conformance/README.md) describes.
 
 Tests take every database and API target from these variables and nothing else. None has
@@ -365,8 +370,8 @@ scripts `tests/test_deep_extract_lease.py`, `tests/test_episode_batching_smoke.p
 `tests/test_window_isolation_smoke.py`.
 
 **Known failures.** The suite is not green against a fresh build. Measured 2026-11-02 on
-this export (2,436 tests) with `KOI_TEST_DATABASE_URL` and `KOI_TEST_ADMIN_DSN` set on a
-throwaway cluster, no API and no network: 1,995 passed, 213 failed, 9 errors, 219 skipped.
+this export (2,780 tests) with `KOI_TEST_DATABASE_URL` and `KOI_TEST_ADMIN_DSN` set on a
+throwaway cluster, no API and no network: 2,335 passed, 213 failed, 9 errors, 223 skipped.
 Of the 222 failures and errors:
 
 - 195 insert into `entity_registry` without an `embedding`, which the fresh schema declares

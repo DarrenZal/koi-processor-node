@@ -165,7 +165,7 @@ queryability. The audit log records whether IRI verification succeeded or was sk
 | `api/ledger_anchor.py` | Timeout fix, `verify_anchor_onchain()`, `query_tx_status()` (never raises) |
 | `api/routers/claims_router.py` | `AnchorPendingResponse`, `ReconcileResponse`, `/reconcile` endpoint, 202 paths |
 | `tests/test_claims_reconcile.py` | 16 pytest tests (in-process ASGI + monkeypatch) |
-| `scripts/test_claims_api.py` (not in this export) | 4 HTTP smoke tests (tests 17-20) |
+| `scripts/test_claims_api.py` | 4 HTTP smoke tests (tests 17-20) |
 
 ### Testing
 
@@ -174,9 +174,10 @@ queryability. The audit log records whether IRI verification succeeded or was sk
 pytest tests/test_claims_reconcile.py -v
 ```
 
-The HTTP smoke suite, `scripts/test_claims_api.py` (not in this export), is left out: it
-writes claims through the API it is given, and its cleanup connects to the database
-`KOI_LIVE_POSTGRES_URL` or `POSTGRES_URL` names, not necessarily the API's.
+```bash
+# HTTP smoke suite (requires running server; without --apply it only prints its plan)
+python -m scripts.test_claims_api --base-url http://localhost:8351 --apply
+```
 
 ## What V1 Does NOT Cover
 

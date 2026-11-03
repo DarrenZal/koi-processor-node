@@ -74,10 +74,10 @@ Both Phase 0a (single-instance) and Phase 0b (two-instance federation) passed al
 | File | Purpose |
 |------|---------|
 | `schema.py` | TerminusDB schema + canonical functions |
-| `import_from_postgres.py` (not in this export) | PostgreSQL → TerminusDB import |
+| `import_from_postgres.py` | PostgreSQL → TerminusDB import |
 | `test_merge.py` | 10 single-instance tests |
 | `test_federation.py` | 8 two-instance tests |
-| `run_phase0.sh` (not in this export) | Test harness (0a/0b/all/clean) |
+| `run_phase0.sh` | Test harness (0a/0b/all/clean) |
 
 ## Usage
 
@@ -85,14 +85,26 @@ These scripts need Docker and the `terminusdb-client` Python package, which
 `requirements.txt` does not install (it was removed as unused, and it does not support
 Python 3.13+). Install it into the venv first: `pip install terminusdb-client`.
 
-The Phase 0 harness, `scripts/terminusdb/run_phase0.sh` (not in this export), and the
-importer it runs, `scripts/terminusdb/import_from_postgres.py` (not in this export), are
-left out: with no arguments they start a TerminusDB container and copy the default
-`personal_koi` database into it. To run the tests, start a throwaway TerminusDB v12
-container on port 6363 (and a second one on 6364 for the two-instance tests), then run
-`python -m scripts.terminusdb.test_merge` and `python -m scripts.terminusdb.test_federation`
-from the repository root. Each test script deletes and recreates its own test database
-(`koi_merge_test`, `koi_federation_test`) and writes `results.json` in this directory.
+```bash
+# Without --apply the harness only prints its plan.
+# Run Phase 0a (single instance)
+bash scripts/terminusdb/run_phase0.sh 0a --fresh --apply --confirm-destructive
+
+# Run Phase 0b (two instances, requires 0a pass)
+bash scripts/terminusdb/run_phase0.sh 0b --apply
+
+# Run both
+bash scripts/terminusdb/run_phase0.sh all --fresh --apply --confirm-destructive
+
+# Cleanup Docker containers
+bash scripts/terminusdb/run_phase0.sh clean --apply --confirm-destructive
+```
+
+`--fresh` and `clean` remove both evaluation containers and their data volumes, including
+the `terminusdb` container on port 6363 that the Phase 1 mirror below also uses and its
+volume `terminusdb_data` (the mirror can be rebuilt from PostgreSQL with
+`import_from_postgres.py --apply --fresh --confirm-destructive` once a `terminusdb` container
+runs again).
 
 ## Phase 1: Live Integration (Outbox Pattern)
 
@@ -115,7 +127,7 @@ register-entity / sync-relationships
             │ (async, 2s poll)
             ▼
   ┌─────────────────────┐
-  │  outbox_worker.py   │  claim → apply → mark applied (not in this export)
+  │  outbox_worker.py   │  claim → apply → mark applied
   └─────────┬───────────┘
             │
             ▼
@@ -123,10 +135,6 @@ register-entity / sync-relationships
   │  TerminusDB         │  ← graph mirror
   └─────────────────────┘
 ```
-
-The outbox worker, `scripts/terminusdb/outbox_worker.py` (not in this export), is left
-out: with no arguments it connects to the default `personal_koi` database and drains its
-outbox in a loop.
 
 ### Key Properties
 
@@ -142,9 +150,20 @@ outbox in a loop.
 
 ### Smoke Test
 
-The Phase 1 smoke test, `scripts/terminusdb/smoke_phase1.sh` (not in this export), is
-left out: it reads `config/personal.env` and writes test entities into that node, with no
-cleanup.
+```bash
+# Quick validation (uses existing TDB data). Without --apply it only prints its plan.
+# The targets must pass the test-target guard (see the script's header).
+KOI_TEST_API_URL=http://127.0.0.1:<free port> \
+KOI_TEST_DATABASE_URL=postgresql://<role>@127.0.0.1:<port>/<db with test in its name> \
+    bash scripts/terminusdb/smoke_phase1.sh --apply --env-file config/personal.env
+
+# Fresh: drop TDB, reimport from PG, then test
+KOI_TEST_API_URL=... KOI_TEST_DATABASE_URL=... \
+    bash scripts/terminusdb/smoke_phase1.sh --apply --fresh --confirm-destructive --env-file config/personal.env
+```
+
+Tests: preflight, import, health, entity registration, outbox drain,
+auth guard, fail-open + recovery, reconciliation.
 
 ### Files
 
@@ -153,11 +172,11 @@ cleanup.
 | `api/personal_ingest_api.py` | API + outbox write points + `/graph/*` endpoints |
 | `api/terminusdb_adapter.py` | Adapter with schema guard + idempotent upserts |
 | `api/vault_parser.py` | Relationship sync (SAVEPOINT isolation for FK failures) |
-| `scripts/terminusdb/outbox_worker.py` (not in this export) | Async worker draining outbox → TDB |
+| `scripts/terminusdb/outbox_worker.py` | Async worker draining outbox → TDB |
 | `scripts/terminusdb/schema.py` | Entity(rid), Assertion schema |
-| `scripts/terminusdb/import_from_postgres.py` (not in this export) | Bulk import with `--fresh` flag |
+| `scripts/terminusdb/import_from_postgres.py` | Bulk import with `--fresh` flag |
 | `scripts/terminusdb/reconcile.py` | Drift detection + `--repair` |
-| `scripts/terminusdb/smoke_phase1.sh` (not in this export) | Automated smoke test |
+| `scripts/terminusdb/smoke_phase1.sh` | Automated smoke test |
 | `migrations/048_terminusdb_outbox.sql` | Outbox table DDL |
 
 ### Starting the Stack
@@ -174,8 +193,11 @@ cd <koi-processor checkout>
   venv/bin/uvicorn api.personal_ingest_api:app --host 127.0.0.1 --port 8351 )
 ```
 
-The outbox worker that drains the mirror's queue is not in this export (see Architecture
-above).
+```bash
+# Worker (Terminal 2)
+( set -a; source config/personal.env; set +a
+  venv/bin/python -m scripts.terminusdb.outbox_worker --run )
+```
 
 **Important**: Use `set -a; source config/personal.env; set +a` (not `export $(grep ...)`)
 to safely load env vars with spaces/quotes.
