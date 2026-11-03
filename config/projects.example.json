@@ -1,0 +1,13 @@
+{
+  "_comment": "Operator-local project registry for scripts/project_bridge_notes.py. Copy this file to config/projects.json (gitignored) and edit, OR point KOI_PROJECTS_CONFIG at your own JSON file. Each key is a project slug; bridge_dir is the directory of that repo's bridge notes (~ and $VARS are expanded). koi-processor ships with NO real projects — these are examples.",
+  "myproject": {
+    "project_id": "myproject",
+    "claimant_uri": "org:myproject-learning-field",
+    "bridge_dir": "~/projects/myproject/docs/research/connections"
+  },
+  "another-canon": {
+    "project_id": "another-canon",
+    "claimant_uri": "org:another-canon-learning-field",
+    "bridge_dir": "$HOME/repos/another-canon/docs/research/connections"
+  }
+}

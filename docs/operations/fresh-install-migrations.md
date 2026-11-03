@@ -22,7 +22,7 @@ builds from empty. Before it writes anything it checks, and refuses unless all h
 - psql is version 10 or later;
 - the database has no `koi_migrations` (created by migration 052) and no
   `koi_schema_migrations` (the ledger of federation peers built by
-  the federation setup script, which is not in this export);
+  `scripts/federation/setup-node.sh`);
 - no `koi_fresh_install_in_progress` marker is left from an earlier run;
 - the `public` schema has no table, view, materialized view or foreign table, counted from
   `pg_catalog` (so tables the connecting role cannot read still count);
@@ -38,12 +38,10 @@ and recreate the database before running again. The runner does not resume: it r
 database that is no longer empty, and it refuses one that still holds the marker
 ("a previous fresh install did not finish").
 
-Measured 2026-10-31 on PostgreSQL 14.15 with pgvector 0.8.0. A dropped and recreated
-database, one runner run: 141 applied, 0 skipped (this export leaves out the 10 files the plan skips), 0 failed, 0 files with
+Measured 2026-11-02 on this export, on PostgreSQL 14.15 with pgvector 0.8.0. A new
+database, one runner run: 142 applied, 9 skipped by the profile, 0 failed, 0 files with
 statement errors, 0 `ERROR` lines in the output. Afterwards the API started with
-`/health` healthy, and `/tasks/stats` and `POST /tasks/ingest` worked. Since 139a was added
-(2026-11-01) the same run applies 142, and `GET /entities` and `GET /entity-search` return
-200 on the new database.
+`/health` healthy, and `/tasks/stats`, `POST /tasks/ingest` and `GET /entities` worked.
 
 ## Existing databases
 
@@ -52,8 +50,13 @@ No runner applies migrations to an existing personal database:
 - `scripts/run_migrations.sh` refuses a `personal_koi` that is not empty. For other
   databases it refuses `koi_migrations` (bypass: `KOI_ALLOW_LEGACY_RUNNER=1`) and
   `koi_schema_migrations` (no bypass).
-- The private development repository's backup runner and federation peer scripts, which
-  are not in this export, refuse the same databases.
+- `scripts/run_migrations_with_backup.sh` (not in this export) refuses any database named `personal_koi`, and
+  refuses `koi_migrations` (bypass: `KOI_ALLOW_LEGACY_RUNNER=1`) and `koi_schema_migrations`
+  (no bypass).
+- `scripts/federation/lib.sh` (used by `setup-node.sh`) migrates
+  only databases it built, which track migrations in `koi_schema_migrations`. It refuses a
+  database left with the fresh-install marker, and one that has `koi_migrations` or
+  `koi_net_events` but no `koi_schema_migrations` (bypass: `KOI_ALLOW_LEGACY_RUNNER=1`).
 
 `KOI_ALLOW_LEGACY_RUNNER=1` re-runs files the database's own ledger already recorded; use
 it only on a database you can rebuild. To add a new migration to an existing database,
@@ -63,7 +66,9 @@ apply that one file and record it in the database's ledger:
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f migrations/NNN_name.sql
 ```
 
-Record it in `koi_migrations`.
+Record it in `koi_migrations` (baseline manifests: `scripts/stamp_baseline.py`) or, on a
+federation peer, let `scripts/federation/setup-node.sh` apply and record it in
+`koi_schema_migrations`.
 
 ## What the personal profile does
 
@@ -72,14 +77,15 @@ The personal profile is chosen when the database is named exactly `personal_koi`
 change it. Files are applied in byte order (`LC_ALL=C`), and the run stops at the first
 file that fails outright.
 
-- **Skipped.** The private repository also holds nine RegenAI-era migrations that fail on
-  a personal database (`002`, `005`, `006`, `007`, `010`, `011`, `013`, `015` and
-  `add_code_graph_provenance`) and `083_mediawiki_redirect_resolver`, which refuses any
-  database user except the maintainer's own role. The personal profile skips them by name,
-  and this export leaves them out.
-- **Replaced.** `083a_mediawiki_redirect_resolver_fresh_install` carries 083's statements
-  without its guard. It creates the view only when it is absent, so it never drops one (or
-  the grants on it).
+- **Skipped, RegenAI-era.** These target the RegenAI `eliza` schema (agents, koi_content,
+  koi_transformation_receipts, the Milestone B dashboards, Jena, code-graph provenance)
+  and fail on a personal database: `002`, `005`, `006_fix_cat_receipts`, `007`, `010`,
+  `011`, `013`, `015` and `add_code_graph_provenance`. They are not recorded as applied.
+- **Replaced.** The private repository's `083_mediawiki_redirect_resolver`, which is not in
+  this export, refuses any database user except the maintainer's own role.
+  `083a_mediawiki_redirect_resolver_fresh_install` carries its statements without that
+  guard. It creates the view only when it is absent, so it never drops one (or the grants
+  on it).
 - **Deferred.** `033_email_sensor_tables` indexes `koi_memory_chunks`, which `044`
   creates, so it runs right after `044_koi_memories_rag`. The runner stops if `044` is
   missing.
@@ -90,7 +96,9 @@ file that fails outright.
   a live database, with or without that setting, each one prints "nothing to do" and
   changes nothing, because the marker is absent. Line 1 of each sets `ON_ERROR_STOP`, so a
   psql older than 10, which does not know `\if`, stops instead of running the body. The
-  other runners skip them: `scripts/run_migrations.sh` outside the personal profile.
+  other runners skip them: `scripts/run_migrations.sh` outside the personal profile,
+  `scripts/federation/lib.sh` (it applies files with psycopg2, which cannot run their psql
+  meta-commands), and `scripts/run_migrations_with_backup.sh` (not in this export) in every case.
 
 | File | Why |
 |---|---|
@@ -107,20 +115,24 @@ file that fails outright.
 
 Each on a throwaway PostgreSQL 14.15 cluster.
 
-- New database, one run: 141 applied, 0 skipped (the files the plan skips are not in this export), 0 failed, 0 `ERROR` lines.
+- New database, one run: 141 applied, 10 skipped by the plan, 0 failed, 0 `ERROR` lines. The 10 were the nine RegenAI-era files and 083. This export does not carry 083, so here the plan skips 9, and since 139a it applies 142.
 - A schema-only copy of a live database, restored as `personal_koi`: the runner refuses
   (`koi_migrations` present) and the schema dump hash is unchanged. Each fresh-install
   file applied by hand, with and without `koi.fresh_install=on`, left the hash unchanged.
-- A `personal_koi` built the way the federation setup script builds a peer: the runner
-  refuses before writing anything (`koi_schema_migrations` present), and the schema dump
-  hash is unchanged.
+- A `personal_koi` built the way `scripts/federation/setup-node.sh` builds a peer: the
+  runner refuses before writing anything (`koi_schema_migrations` present), and the
+  schema dump hash is unchanged.
 - A leftover marker: the runner refuses ("a previous fresh install did not finish").
 - A fresh run killed with SIGKILL part-way: the marker stays, and the next run refuses.
+- A schema-only copy of a live database, restored as `personal_koi`: `lib.sh` refuses
+  before writing (`koi_migrations` present, no `koi_schema_migrations`), and the schema dump
+  hash is unchanged.
 
 ## Compared with the previous behaviour
 
 A new database built by the previous runner (all files applied, errors and all) was
 compared with one built by the personal profile. Every object the profile no longer
 creates either has no users in `api/`, `src/` or `scripts/`, or is used only by
-RegenAI-stack modules that the personal API does not import. `entity_registry.aliases` is now TEXT[], as on
+RegenAI-stack modules that the personal API does not import
+(`src/core/koi_permissions_api.py`, `src/cat/cat_receipt_chain_v2.py` (not in this export)). `entity_registry.aliases` is now TEXT[], as on
 live databases, instead of JSONB.

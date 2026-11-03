@@ -1,0 +1,18 @@
+# Federation migration manifest (fresh peer onboarding)
+#
+# This manifest is intentionally narrow: only KOI-net + vault-sync schema required
+# for federation onboarding and multi-peer sync.
+# Legacy application migrations are excluded by design.
+
+040_koi_net_federation.sql
+041_koi_net_cross_refs.sql
+042_koi_net_event_dedup.sql
+046_koi_net_nodes_ontology_columns.sql
+048_event_target_node.sql
+049_peer_aliases.sql
+049_vault_sync.sql
+050_vault_sync_metrics.sql
+057_encryption_key.sql
+060_multi_peer_sync.sql
+061_edge_status_index.sql
+137_federation_rid_blocks.sql

@@ -1,0 +1,54 @@
+#!/bin/bash
+# Query and local review surface for cross-source discourse candidates,
+# for Claude Code, Codex and people. Install once:
+#   ln -sfn <koi-processor checkout>/scripts/koi-discourse ~/.local/bin/koi-discourse
+#
+#   koi-discourse candidates [--query TEXT | --move-id UUID] [--run-id RUN] [--limit N]
+#   koi-discourse jobs [--source-rid RID]
+#   koi-discourse queue [--run-id RUN] [--seen-in-run RUN] [--tier TIER] [--order ORDER] [--lane LANE] [--limit N]
+#   koi-discourse batch (--candidate-id ID ... | --from-queue N) [--run-id RUN] [--seen-in-run RUN] [--tier TIER] --out FILE [--binding-out FILE]
+#   koi-discourse show --batch FILE [--binding FILE] [--item N] [--verify]
+#   koi-discourse annotate --batch FILE --item N --answer A --reviewer NAME --annotations FILE [--binding FILE --item-id ID] [--reason TEXT]
+#   koi-discourse review --batch FILE --reviewer NAME --annotations FILE [--binding FILE]
+#   koi-discourse annotations --annotations FILE [--batch FILE]
+#
+# Every database read runs in one READ ONLY transaction.
+#   candidates  moves that have open candidates, each with its own source (rid,
+#               title, URL) and every candidate's other end and source. Candidates
+#               are labelled "candidate (unreviewed)": text similarity only, not
+#               identity, support, contradiction or corroboration. Admitted
+#               (reviewed) judgments, if any exist, are listed separately under
+#               admitted_relations. --run-id: candidates first discovered by RUN.
+#   jobs        discovery jobs (pending, running, completed, failed, stale) with
+#               their per-claim limit, errors, run and candidate count, and the
+#               bound extractions that have no job.
+#   queue, batch, show, annotate, review, annotations
+#               local review (scripts/discourse_review.py). --run-id: first
+#               discovered by RUN. --seen-in-run: each sighting by RUN, reviewed
+#               from its own query. Answers "Is B useful to someone studying A?".
+# Nothing here writes to the database. batch writes the file(s) you name;
+# annotate and review append to the annotation file you name.
+#
+# Overrides: KOI_DISCOURSE_REPO_DIR, KOI_DISCOURSE_PYTHON, KOI_DISCOURSE_DSN,
+# KOI_DISCOURSE_REVIEW_MAPPINGS.
+
+set -euo pipefail
+
+SELF="$(readlink -f "${BASH_SOURCE[0]}")"
+REPO_DIR="${KOI_DISCOURSE_REPO_DIR:-$(cd "$(dirname "$SELF")/.." && pwd)}"
+PY="${KOI_DISCOURSE_PYTHON:-$REPO_DIR/venv/bin/python}"
+DSN="${KOI_DISCOURSE_DSN:-postgresql://koi:@localhost:5432/personal_koi?application_name=koi-discourse-read}"
+
+usage() { sed -n '2,33p' "$SELF" | sed 's/^# \{0,1\}//'; }
+
+cmd="${1:-}"
+[ $# -gt 0 ] && shift
+[ -x "$PY" ] || { echo "koi-discourse: missing interpreter $PY" >&2; exit 3; }
+case "$cmd" in
+    candidates) exec "$PY" -B "$REPO_DIR/scripts/discourse_links_canary.py" candidates --dsn "$DSN" "$@" ;;
+    jobs)       exec "$PY" -B "$REPO_DIR/scripts/discourse_discovery_worker.py" status --dsn "$DSN" "$@" ;;
+    queue|batch|show|annotate|review|annotations)
+                exec "$PY" -B "$REPO_DIR/scripts/discourse_review.py" "$cmd" --dsn "$DSN" "$@" ;;
+    ""|-h|--help|help) usage ;;
+    *) echo "koi-discourse: unknown command '$cmd' (candidates | jobs | queue | batch | show | annotate | review | annotations)" >&2; exit 2 ;;
+esac

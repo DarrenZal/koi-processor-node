@@ -1,0 +1,242 @@
+{
+  "description": "Baseline manifest for personal_koi database",
+  "node": "personal",
+  "created_at": "2026-02-25",
+  "migrations": [
+    {
+      "id": "core:001_create_transformation_receipts",
+      "file": "001_create_transformation_receipts.sql",
+      "checksum": "8564f0ea59db650b2b4b7f0ff204f44e19ba2d2f13aea370e0a3f5eaf8a0e8bf"
+    },
+    {
+      "id": "core:001_oauth_tokens",
+      "file": "001_oauth_tokens.sql",
+      "checksum": "5d62284562563b70f5fa4f987be810803e5ea24f85724dfa22de81e216ca0ecb"
+    },
+    {
+      "id": "core:002_create_agent_knowledge_permissions",
+      "file": "002_create_agent_knowledge_permissions.sql",
+      "checksum": "a3d03e156050f70d48120a0d9ff585f656b0315c8d4094743f5c3819a90adc7c"
+    },
+    {
+      "id": "core:003_create_isolated_koi_tables",
+      "file": "003_create_isolated_koi_tables.sql",
+      "checksum": "3e6c0f9e236b6d6cc081f33a572362940b97eb9b197c34a0fd040fb848807fa4"
+    },
+    {
+      "id": "core:004_add_publication_dates",
+      "file": "004_add_publication_dates.sql",
+      "checksum": "8ef0a31705eb964a7dbe2a014ffc706c8137cd51c6b453a084ea10ab552230fa"
+    },
+    {
+      "id": "core:005_create_dashboard_tables",
+      "file": "005_create_dashboard_tables.sql",
+      "checksum": "4e7a7b44d4a453cfbb639a06e5e919f6f5b05e84c232a6a3d1a18d02966a28c5"
+    },
+    {
+      "id": "core:006_create_koi_query_log",
+      "file": "006_create_koi_query_log.sql",
+      "checksum": "ab19df3f3ff507812dc8f0c3d2568ced7702027929f42af3f0cb7eeb3e144d1e"
+    },
+    {
+      "id": "core:006_fix_cat_receipts",
+      "file": "006_fix_cat_receipts.sql",
+      "checksum": "00b3c9d6e0b536e7aa05cd64cc04d6c5b0584c5a8425bcb6b12e8f649bf818c9"
+    },
+    {
+      "id": "core:007_improved_storage_architecture",
+      "file": "007_improved_storage_architecture.sql",
+      "checksum": "33f608531683a4bf5f17bcc8aff2fa162321f6a1272eb45ffb6a11b9e0597e9f"
+    },
+    {
+      "id": "core:010_jena_integration",
+      "file": "010_jena_integration.sql",
+      "checksum": "8999017d28e459fd793c5f5da41bbb238349c08c7ea7dfc681bd9ccf16019fea"
+    },
+    {
+      "id": "core:011_adaptive_knowledge_query_log",
+      "file": "011_adaptive_knowledge_query_log.sql",
+      "checksum": "58fcc7492ac5533742a81be722476255a856e91196998de5cc7641bcb89d6a0b"
+    },
+    {
+      "id": "core:012_fix_production_alignment",
+      "file": "012_fix_production_alignment.sql",
+      "checksum": "f69625e5c1227bb946a04a8c01496afa62bd3170089e47668bd8bb2f72287e8e"
+    },
+    {
+      "id": "core:013_create_kg_tables",
+      "file": "013_create_kg_tables.sql",
+      "checksum": "9e4d2d309b57d68feb9bd53aec849b86d847093919f9a900b0519e5e7b05466e"
+    },
+    {
+      "id": "core:014_oauth_tokens",
+      "file": "014_oauth_tokens.sql",
+      "checksum": "5d62284562563b70f5fa4f987be810803e5ea24f85724dfa22de81e216ca0ecb"
+    },
+    {
+      "id": "core:015_add_privacy_column",
+      "file": "015_add_privacy_column.sql",
+      "checksum": "4e088d67a36d3610ca9be63115597a8e0be6a601405c9f9a13eca3f89eaef8ce"
+    },
+    {
+      "id": "core:016_add_session_tokens",
+      "file": "016_add_session_tokens.sql",
+      "checksum": "b076bd8174f6c76ae2825ffc9e6a9e4356ecf1b84cfb3249497f19e068be1064"
+    },
+    {
+      "id": "core:017_secure_auth_flow",
+      "file": "017_secure_auth_flow.sql",
+      "checksum": "04630aa99282921ff9b43c3b71be226b609978e6022cf99e5840be85c2ce2af8"
+    },
+    {
+      "id": "core:018_remove_plain_token_from_session_tokens",
+      "file": "018_remove_plain_token_from_session_tokens.sql",
+      "checksum": "860983511ebda8a37c08f0e75e965e5ee5b4a6abff439b75502ad8ab6f61a6f2"
+    },
+    {
+      "id": "core:019_rfc8628_user_code_flow",
+      "file": "019_rfc8628_user_code_flow.sql",
+      "checksum": "204e7dc0dd0ed3d33915590fa527cf312494653602f028352f630f1b270f4c2e"
+    },
+    {
+      "id": "core:020_entity_registry",
+      "file": "020_entity_registry.sql",
+      "checksum": "45f800a26b52070133cca278df457a9c1c8b217b6071a2661df6216fc4ba156d"
+    },
+    {
+      "id": "core:022_entity_chunk_links",
+      "file": "022_entity_chunk_links.sql",
+      "checksum": "82d5748a2e8d6d6ee199cbd992958472a219ef4b28a3abafde10f01fe42406c0"
+    },
+    {
+      "id": "core:023_content_hash_dedup_index",
+      "file": "023_content_hash_dedup_index.sql",
+      "checksum": "9d5b0df8c64110cc2a859cb375390a7a7dafec7aba8432b718029f84eecffd50"
+    },
+    {
+      "id": "core:024_code_docs_bridge",
+      "file": "024_code_docs_bridge.sql",
+      "checksum": "28cedecbf2b43fcf5aae97aef25ed11d2e351d70258a38d17535ec83fc84db00"
+    },
+    {
+      "id": "core:025_add_content_tsv_fts",
+      "file": "025_add_content_tsv_fts.sql",
+      "checksum": "7bcc16fc91cddd497b360b1448f88d1d3f18f41f1af2554ed1c774be73d5fe59"
+    },
+    {
+      "id": "core:026_anchored_metadata_records",
+      "file": "026_anchored_metadata_records.sql",
+      "checksum": "1964170cb447f03228870e99225cfd9ec8b1f8f9e77f69ad5bcdcd2e221fd8a6"
+    },
+    {
+      "id": "core:030_ledger_entity_fields",
+      "file": "030_ledger_entity_fields.sql",
+      "checksum": "d1f06136425bfc73d783429b202412e0ad0b2bf96ea59b53c20b584325ea011a"
+    },
+    {
+      "id": "core:031_user_profiles",
+      "file": "031_user_profiles.sql",
+      "checksum": "5cc145a9ec7d5eaea59d1a8e253b80052ab49e8d7a65e02416452359f49dbd36"
+    },
+    {
+      "id": "core:032_entity_relationships",
+      "file": "032_entity_relationships.sql",
+      "checksum": "281692656f77fe56358c59542d897168811fea722ef698ad33ff8599f54bd8b5"
+    },
+    {
+      "id": "core:033_email_sensor_tables",
+      "file": "033_email_sensor_tables.sql",
+      "checksum": "da6205364b81f3f0fb53242a2902ffd123d1333cdbf691dbf3a7f9de82202b83"
+    },
+    {
+      "id": "core:036_aliases_text_array",
+      "file": "036_aliases_text_array.sql",
+      "checksum": "14d62e8f6ce675067647b371fe711c04a518de013cea3a5431d015a41cb2bcc4"
+    },
+    {
+      "id": "core:037_canonical_source_mappings",
+      "file": "037_canonical_source_mappings.sql",
+      "checksum": "64af58233cf75a0d92923af5752affcee288cc8a60dffda35fd70b98ed2b4532"
+    },
+    {
+      "id": "core:038_bkc_predicates",
+      "file": "038_bkc_predicates.sql",
+      "checksum": "7b5d6d6f4a6732ab90d94a299d2b1a02b9765eed364deb2166697a8bbc374804"
+    },
+    {
+      "id": "core:039_code_docstring_extractions",
+      "file": "039_code_docstring_extractions.sql",
+      "checksum": "19444f9de1dd8dd638bd4873d21e2586ba3dc15f2e5a42fcdfa7dcf0e02669bb"
+    },
+    {
+      "id": "core:040_koi_net_federation",
+      "file": "040_koi_net_federation.sql",
+      "checksum": "f1b729f2696a8dadfb3c1029e428376cbc74dcc398cfb656bd22b41eba9cbdb8"
+    },
+    {
+      "id": "core:041_koi_net_cross_refs",
+      "file": "041_koi_net_cross_refs.sql",
+      "checksum": "433c212908be35b66a1d6290ab357efc3fe0e13b32fdb55ba8b7d042c128ead0"
+    },
+    {
+      "id": "core:042_koi_net_event_dedup",
+      "file": "042_koi_net_event_dedup.sql",
+      "checksum": "8c291a6519ce7ce456b6f0d3669919cd87ecdc6248dce7282fc8074e7ad1ad85"
+    },
+    {
+      "id": "core:043_event_target_node",
+      "file": "043_event_target_node.sql",
+      "checksum": "3c22ec8f83f88806b5a8482bfaaf2f11c7429d25680d39dc273ab493ef74fff4"
+    },
+    {
+      "id": "core:044_shared_documents",
+      "file": "044_shared_documents.sql",
+      "checksum": "64ce57ad4c261a07099f5b81c2ec279fb436997a395f09ceb0eaa3072dbba43d"
+    },
+    {
+      "id": "core:045_outbound_share_ledger",
+      "file": "045_outbound_share_ledger.sql",
+      "checksum": "58d97e7455a078136d6f40576903306fdeade918da2e537173831c45b34b50ee"
+    },
+    {
+      "id": "core:046_koi_net_nodes_ontology_columns",
+      "file": "046_koi_net_nodes_ontology_columns.sql",
+      "checksum": "0a0bd4284915527ebd58baf7db1a03fcdd39c36e00f7f92a350b4b8a21e7e8c3"
+    },
+    {
+      "id": "core:047_shared_documents_intake",
+      "file": "047_shared_documents_intake.sql",
+      "checksum": "e9e18616b772afbabfcef2ca78bf0671d5c9d7f22e6eb0b5d33b33047ab2d149"
+    },
+    {
+      "id": "core:048_terminusdb_outbox",
+      "file": "048_terminusdb_outbox.sql",
+      "checksum": "9a8e68c2a7c928d4dc78d37b4e4791f158efaf929d78dd5317e776655d6569be"
+    },
+    {
+      "id": "core:049_vault_sync",
+      "file": "049_vault_sync.sql",
+      "checksum": "da5d5eb26f218cf048ff895cf3f8e9fe9dce30eb0df58380b7e81a39252388cf"
+    },
+    {
+      "id": "core:050_vault_sync_metrics",
+      "file": "050_vault_sync_metrics.sql",
+      "checksum": "09437f14638d0d638ac605873ba2d818647e9fd94b58971df00d9a77c33f5c3e"
+    },
+    {
+      "id": "core:051_assertion_history",
+      "file": "051_assertion_history.sql",
+      "checksum": "4b225a4408d480f278ad915118576d22f658460e72894e1c06e63266a55d0b47"
+    },
+    {
+      "id": "core:052_koi_migrations_registry",
+      "file": "052_koi_migrations_registry.sql",
+      "checksum": "86c17c1b424f107522683fb06d763fb5de13cce2a42d6e85268e1c1d4deaa9f9"
+    },
+    {
+      "id": "core:add_code_graph_provenance",
+      "file": "add_code_graph_provenance.sql",
+      "checksum": "8f073e4d1405903daa8a9e93e33c7a1ede38c25a664016f4790770edb85280b7"
+    }
+  ]
+}

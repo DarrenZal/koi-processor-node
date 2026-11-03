@@ -1,0 +1,11 @@
+services:
+  terminusdb:
+    image: terminusdb/terminusdb-server:v12
+    ports:
+      - "6363:6363"
+    volumes:
+      - terminusdb_data:/app/terminusdb/storage
+    restart: unless-stopped
+
+volumes:
+  terminusdb_data:

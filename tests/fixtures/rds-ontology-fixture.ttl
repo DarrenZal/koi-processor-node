@@ -1,0 +1,21 @@
+@prefix rfs: <https://framework.regen.network/schema/> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+
+# Minimal fixture for testing OntologyLoader hierarchy parsing.
+
+rfs:Entity a owl:Class ;
+    rdfs:label "Entity" .
+
+rfs:Agent a owl:Class ;
+    rdfs:subClassOf rfs:Entity ;
+    rdfs:label "Agent" .
+
+rfs:WorkOrder a owl:Class ;
+    rdfs:label "WorkOrder" .
+
+rfs:GovernanceDecision a owl:Class ;
+    rdfs:label "GovernanceDecision" .
+
+rfs:CoherenceCheck a owl:Class ;
+    rdfs:label "CoherenceCheck" .

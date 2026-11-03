@@ -1,0 +1,319 @@
+@prefix koi: <https://regen.network/koi#> .
+@prefix regen: <https://regen.network/ontology#> .
+@prefix prov: <http://www.w3.org/ns/prov#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix dc: <http://purl.org/dc/elements/1.1/> .
+@prefix schema: <http://schema.org/> .
+
+# KOI Provenance Ontology
+# Extends W3C PROV-O for tracking data transformations in the KOI pipeline
+
+<https://regen.network/koi#> a owl:Ontology ;
+    dc:title "KOI Provenance Ontology" ;
+    dc:description "Ontology for tracking provenance of data artifacts in the KOI sensor pipeline" ;
+    dc:creator "Regen Network" ;
+    dc:date "2025-09-26" ;
+    owl:imports <http://www.w3.org/ns/prov#> ;
+    rdfs:comment "This ontology extends PROV-O to track transformations, extractions, and derivations in the KOI knowledge pipeline" .
+
+# =============================================================================
+# CLASSES - Artifact Types
+# =============================================================================
+
+# Base artifact class
+koi:Artifact a owl:Class ;
+    rdfs:subClassOf prov:Entity ;
+    rdfs:label "KOI Artifact" ;
+    rdfs:comment "Any data artifact in the KOI pipeline with a RID" .
+
+# Source artifacts
+koi:WebSource a owl:Class ;
+    rdfs:subClassOf koi:Artifact ;
+    rdfs:label "Web Source" ;
+    rdfs:comment "Original URL or web resource" .
+
+koi:ScrapedContent a owl:Class ;
+    rdfs:subClassOf koi:Artifact ;
+    rdfs:label "Scraped Content" ;
+    rdfs:comment "Raw HTML, JSON, or other content scraped from a source" .
+
+koi:CleanedContent a owl:Class ;
+    rdfs:subClassOf koi:Artifact ;
+    rdfs:label "Cleaned Content" ;
+    rdfs:comment "Processed and cleaned text from scraped content" .
+
+# Document artifacts
+koi:Document a owl:Class ;
+    rdfs:subClassOf koi:Artifact ;
+    rdfs:label "Document" ;
+    rdfs:comment "Structured document with metadata" .
+
+koi:DocumentChunk a owl:Class ;
+    rdfs:subClassOf koi:Artifact ;
+    rdfs:label "Document Chunk" ;
+    rdfs:comment "Chunk of a document for processing" .
+
+# Embedding artifacts
+koi:Embedding a owl:Class ;
+    rdfs:subClassOf koi:Artifact ;
+    rdfs:label "Embedding" ;
+    rdfs:comment "Vector embedding of text content" .
+
+koi:BGEEmbedding a owl:Class ;
+    rdfs:subClassOf koi:Embedding ;
+    rdfs:label "BGE Embedding" ;
+    rdfs:comment "BGE model embedding vector" .
+
+# Extracted knowledge artifacts
+koi:ExtractedEntity a owl:Class ;
+    rdfs:subClassOf koi:Artifact ;
+    rdfs:label "Extracted Entity" ;
+    rdfs:comment "Entity extracted from content" .
+
+koi:ExtractedRelation a owl:Class ;
+    rdfs:subClassOf koi:Artifact ;
+    rdfs:label "Extracted Relation" ;
+    rdfs:comment "Relationship extracted between entities" .
+
+koi:JSONLDDocument a owl:Class ;
+    rdfs:subClassOf koi:Artifact ;
+    rdfs:label "JSON-LD Document" ;
+    rdfs:comment "Structured data in JSON-LD format" .
+
+# CAT Receipt
+koi:CATReceipt a owl:Class ;
+    rdfs:subClassOf prov:Entity ;
+    rdfs:label "CAT Receipt" ;
+    rdfs:comment "Content Addressable Transformation receipt" .
+
+# =============================================================================
+# CLASSES - Activity Types (Transformations)
+# =============================================================================
+
+koi:TransformationActivity a owl:Class ;
+    rdfs:subClassOf prov:Activity ;
+    rdfs:label "Transformation Activity" ;
+    rdfs:comment "Any transformation in the KOI pipeline" .
+
+koi:SensorCollection a owl:Class ;
+    rdfs:subClassOf koi:TransformationActivity ;
+    rdfs:label "Sensor Collection" ;
+    rdfs:comment "Collection of data by a KOI sensor" .
+
+koi:WebScraping a owl:Class ;
+    rdfs:subClassOf koi:TransformationActivity ;
+    rdfs:label "Web Scraping" ;
+    rdfs:comment "Scraping content from web sources" .
+
+koi:ContentCleaning a owl:Class ;
+    rdfs:subClassOf koi:TransformationActivity ;
+    rdfs:label "Content Cleaning" ;
+    rdfs:comment "Cleaning and processing raw content" .
+
+koi:DocumentCreation a owl:Class ;
+    rdfs:subClassOf koi:TransformationActivity ;
+    rdfs:label "Document Creation" ;
+    rdfs:comment "Creating structured document from content" .
+
+koi:ContentChunking a owl:Class ;
+    rdfs:subClassOf koi:TransformationActivity ;
+    rdfs:label "Content Chunking" ;
+    rdfs:comment "Splitting document into chunks" .
+
+koi:EmbeddingGeneration a owl:Class ;
+    rdfs:subClassOf koi:TransformationActivity ;
+    rdfs:label "Embedding Generation" ;
+    rdfs:comment "Generating vector embeddings" .
+
+koi:EntityExtraction a owl:Class ;
+    rdfs:subClassOf koi:TransformationActivity ;
+    rdfs:label "Entity Extraction" ;
+    rdfs:comment "Extracting entities from content" .
+
+koi:RelationExtraction a owl:Class ;
+    rdfs:subClassOf koi:TransformationActivity ;
+    rdfs:label "Relation Extraction" ;
+    rdfs:comment "Extracting relationships between entities" .
+
+koi:SemanticEnrichment a owl:Class ;
+    rdfs:subClassOf koi:TransformationActivity ;
+    rdfs:label "Semantic Enrichment" ;
+    rdfs:comment "LLM-based semantic enhancement" .
+
+# =============================================================================
+# CLASSES - Agent Types
+# =============================================================================
+
+koi:Sensor a owl:Class ;
+    rdfs:subClassOf prov:Agent ;
+    rdfs:label "KOI Sensor" ;
+    rdfs:comment "Sensor that collects data" .
+
+koi:Processor a owl:Class ;
+    rdfs:subClassOf prov:Agent ;
+    rdfs:label "KOI Processor" ;
+    rdfs:comment "Processing component in pipeline" .
+
+koi:LLMAgent a owl:Class ;
+    rdfs:subClassOf prov:Agent ;
+    rdfs:label "LLM Agent" ;
+    rdfs:comment "Large Language Model agent" .
+
+# =============================================================================
+# PROPERTIES - Object Properties
+# =============================================================================
+
+# Provenance relationships
+koi:extractedFrom a owl:ObjectProperty ;
+    rdfs:subPropertyOf prov:wasDerivedFrom ;
+    rdfs:label "extracted from" ;
+    rdfs:comment "Entity or relation was extracted from artifact" ;
+    rdfs:domain koi:ExtractedEntity ;
+    rdfs:range koi:Artifact .
+
+koi:chunkOf a owl:ObjectProperty ;
+    rdfs:subPropertyOf prov:wasDerivedFrom ;
+    rdfs:label "chunk of" ;
+    rdfs:comment "Chunk derived from document" ;
+    rdfs:domain koi:DocumentChunk ;
+    rdfs:range koi:Document .
+
+koi:embeddingOf a owl:ObjectProperty ;
+    rdfs:subPropertyOf prov:wasDerivedFrom ;
+    rdfs:label "embedding of" ;
+    rdfs:comment "Embedding generated from text" ;
+    rdfs:domain koi:Embedding ;
+    rdfs:range koi:Artifact .
+
+koi:scrapedFrom a owl:ObjectProperty ;
+    rdfs:subPropertyOf prov:wasDerivedFrom ;
+    rdfs:label "scraped from" ;
+    rdfs:comment "Content scraped from source" ;
+    rdfs:domain koi:ScrapedContent ;
+    rdfs:range koi:WebSource .
+
+koi:hasReceipt a owl:ObjectProperty ;
+    rdfs:label "has receipt" ;
+    rdfs:comment "Transformation has CAT receipt" ;
+    rdfs:domain koi:TransformationActivity ;
+    rdfs:range koi:CATReceipt .
+
+koi:storedIn a owl:ObjectProperty ;
+    rdfs:label "stored in" ;
+    rdfs:comment "Artifact stored in system" ;
+    rdfs:domain koi:Artifact ;
+    rdfs:range xsd:string .
+
+# =============================================================================
+# PROPERTIES - Data Properties
+# =============================================================================
+
+# Artifact properties
+koi:rid a owl:DatatypeProperty ;
+    rdfs:label "Resource Identifier" ;
+    rdfs:comment "KOI Resource Identifier (RID)" ;
+    rdfs:domain koi:Artifact ;
+    rdfs:range xsd:string .
+
+koi:contentHash a owl:DatatypeProperty ;
+    rdfs:label "content hash" ;
+    rdfs:comment "SHA256 hash of content" ;
+    rdfs:domain koi:Artifact ;
+    rdfs:range xsd:string .
+
+koi:contentType a owl:DatatypeProperty ;
+    rdfs:label "content type" ;
+    rdfs:comment "MIME type or format of content" ;
+    rdfs:domain koi:Artifact ;
+    rdfs:range xsd:string .
+
+koi:sizeBytes a owl:DatatypeProperty ;
+    rdfs:label "size in bytes" ;
+    rdfs:comment "Size of artifact in bytes" ;
+    rdfs:domain koi:Artifact ;
+    rdfs:range xsd:integer .
+
+# Transformation properties
+koi:transformationType a owl:DatatypeProperty ;
+    rdfs:label "transformation type" ;
+    rdfs:comment "Type of transformation performed" ;
+    rdfs:domain koi:TransformationActivity ;
+    rdfs:range xsd:string .
+
+koi:confidence a owl:DatatypeProperty ;
+    rdfs:label "confidence" ;
+    rdfs:comment "Confidence score (0.0-1.0)" ;
+    rdfs:domain koi:Artifact ;
+    rdfs:range xsd:float .
+
+koi:extractionModel a owl:DatatypeProperty ;
+    rdfs:label "extraction model" ;
+    rdfs:comment "Model used for extraction" ;
+    rdfs:domain koi:TransformationActivity ;
+    rdfs:range xsd:string .
+
+# Embedding properties
+koi:embeddingModel a owl:DatatypeProperty ;
+    rdfs:label "embedding model" ;
+    rdfs:comment "Model used to generate embedding" ;
+    rdfs:domain koi:Embedding ;
+    rdfs:range xsd:string .
+
+koi:dimensions a owl:DatatypeProperty ;
+    rdfs:label "dimensions" ;
+    rdfs:comment "Number of dimensions in embedding vector" ;
+    rdfs:domain koi:Embedding ;
+    rdfs:range xsd:integer .
+
+koi:postgresId a owl:DatatypeProperty ;
+    rdfs:label "PostgreSQL ID" ;
+    rdfs:comment "ID in PostgreSQL database" ;
+    rdfs:domain koi:Artifact ;
+    rdfs:range xsd:string .
+
+# Chunk properties
+koi:chunkIndex a owl:DatatypeProperty ;
+    rdfs:label "chunk index" ;
+    rdfs:comment "Index of chunk in document" ;
+    rdfs:domain koi:DocumentChunk ;
+    rdfs:range xsd:integer .
+
+koi:chunkSize a owl:DatatypeProperty ;
+    rdfs:label "chunk size" ;
+    rdfs:comment "Size of chunk in characters" ;
+    rdfs:domain koi:DocumentChunk ;
+    rdfs:range xsd:integer .
+
+# CAT Receipt properties
+koi:receiptHash a owl:DatatypeProperty ;
+    rdfs:label "receipt hash" ;
+    rdfs:comment "Hash of CAT receipt" ;
+    rdfs:domain koi:CATReceipt ;
+    rdfs:range xsd:string .
+
+koi:inputRID a owl:DatatypeProperty ;
+    rdfs:label "input RID" ;
+    rdfs:comment "RID of input artifact" ;
+    rdfs:domain koi:CATReceipt ;
+    rdfs:range xsd:string .
+
+koi:outputRID a owl:DatatypeProperty ;
+    rdfs:label "output RID" ;
+    rdfs:comment "RID of output artifact" ;
+    rdfs:domain koi:CATReceipt ;
+    rdfs:range xsd:string .
+
+# Source properties
+koi:url a owl:DatatypeProperty ;
+    rdfs:label "URL" ;
+    rdfs:comment "Source URL" ;
+    rdfs:domain koi:WebSource ;
+    rdfs:range xsd:anyURI .
+
+koi:sourceSensor a owl:DatatypeProperty ;
+    rdfs:label "source sensor" ;
+    rdfs:comment "Sensor that collected the data" ;
+    rdfs:domain koi:Artifact ;
+    rdfs:range xsd:string .

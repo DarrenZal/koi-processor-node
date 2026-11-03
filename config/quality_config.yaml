@@ -1,0 +1,115 @@
+# Quality Control Configuration
+# For Daily Bot and Weekly Digest content validation
+
+# Database connection
+database_url: postgresql://postgres:postgres@localhost:5433/eliza
+
+# Quality thresholds for content approval
+quality_thresholds:
+  min_style_score: 0.8        # Minimum style guide compliance score (0-1)
+  min_validation_score: 0.9   # Minimum validation score (0-1)
+  max_speculation_phrases: 0  # Maximum allowed speculation phrases
+  required_sources: true      # Require source citations
+  max_link_failures: 0        # Maximum allowed broken links
+
+# Auto-publish configuration (after week 1 of manual approvals)
+auto_publish:
+  enabled: false              # Will be enabled after week 1
+  after_days: 7               # Days of manual approval before auto-publish
+  start_date: null            # Set to first approval date
+  min_consecutive_approvals: 5  # Required consecutive approvals before auto-publish
+  quality_threshold: 0.85     # Minimum quality score for auto-publish
+
+# Validation rules
+validation_rules:
+  no_speculation: true        # Check for speculative language
+  verify_links: true          # Verify all links are valid
+  check_sources: true         # Ensure sources are cited
+  professional_tone: true     # Check for professional language
+  fact_checking: true         # Verify factual claims
+  no_private_data: true       # Check for private/sensitive data
+
+# Style guide configuration (David Fortson / Many Mangos)
+style_guide:
+  tone: professional_friendly  # Tone of voice
+  no_speculation: true        # No speculative statements
+  require_sources: true       # Require sources for claims
+  david_fortson_rules: true   # Apply David Fortson style rules
+  
+  # Specific style rules
+  rules:
+    no_all_caps: true         # Avoid excessive capitals
+    no_excessive_punctuation: true  # Limit !!! and ???
+    professional_language: true     # Use professional terms
+    clear_cta: true           # Clear call-to-action
+    consistent_voice: true    # Maintain consistent voice
+    factual_only: true        # Facts only, no speculation
+
+# Speculation phrases to detect
+speculation_phrases:
+  - might be
+  - could be
+  - possibly
+  - potentially
+  - may lead to
+  - expected to
+  - likely to
+  - probable
+  - rumors
+  - unconfirmed
+  - allegedly
+  - supposedly
+  - we believe
+  - we think
+  - we expect
+  - we predict
+  - should be
+  - would be
+  - speculate
+  - forecast
+
+# Professional tone markers (positive indicators)
+professional_markers:
+  - announced
+  - confirmed
+  - launched
+  - released
+  - published
+  - verified
+  - documented
+  - recorded
+  - achieved
+  - completed
+  - established
+  - implemented
+  - deployed
+  - integrated
+  - validated
+
+# Trusted domains for link validation
+trusted_domains:
+  - regen.network
+  - docs.regen.network
+  - registry.regen.network
+  - forum.regen.network
+  - github.com/regen-network
+  - medium.com/@regen-network
+  - twitter.com/regen_network
+  - discord.gg/regen-network
+
+# Rollback configuration
+rollback:
+  max_history: 100            # Maximum rollback history to keep
+  auto_rollback_on_error: false  # Auto-rollback on critical errors
+  notification_enabled: true  # Send notifications on rollback
+
+# Notification settings (future enhancement)
+notifications:
+  enabled: false
+  slack_webhook: null
+  email_recipients: []
+  notify_on:
+    - approval_needed
+    - auto_published
+    - rollback_performed
+    - quality_threshold_failed

@@ -1,0 +1,64 @@
+{
+  "Ecocredit": "ecocredit",
+  "Ecocredit Module": "ecocredit",
+  "Eco Credit": "ecocredit",
+  "Eco Credit Module": "ecocredit",
+  "Eco-credit": "ecocredit",
+  "Eco-credit Module": "ecocredit",
+  "Ecological Credit": "ecocredit",
+  "Ecological Credit Module": "ecocredit",
+  "x/ecocredit": "ecocredit",
+
+  "Data Module": "data",
+  "Regen Data Module": "data",
+  "x/data": "data",
+
+  "Governance Module": "gov",
+  "Gov Module": "gov",
+  "x/gov": "gov",
+
+  "Group Module": "group",
+  "x/group": "group",
+
+  "Auth Module": "auth",
+  "Authentication Module": "auth",
+  "x/auth": "auth",
+
+  "Authorization Module": "authz",
+  "Authz Module": "authz",
+  "x/authz": "authz",
+
+  "Bank Module": "bank",
+  "x/bank": "bank",
+
+  "Staking Module": "staking",
+  "x/staking": "staking",
+
+  "Distribution Module": "distribution",
+  "x/distribution": "distribution",
+
+  "Slashing Module": "slashing",
+  "x/slashing": "slashing",
+
+  "Mint Module": "mint",
+  "x/mint": "mint",
+
+  "Feegrant Module": "feegrant",
+  "x/feegrant": "feegrant",
+
+  "Params Module": "params",
+  "x/params": "params",
+
+  "Upgrade Module": "upgrade",
+  "x/upgrade": "upgrade",
+
+  "Evidence Module": "evidence",
+  "x/evidence": "evidence",
+
+  "Capability Module": "capability",
+  "x/capability": "capability",
+
+  "IBC Module": "ibc",
+  "Ibc Module": "ibc",
+  "x/ibc": "ibc"
+}

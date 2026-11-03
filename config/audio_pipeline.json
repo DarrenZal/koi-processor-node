@@ -1,0 +1,39 @@
+{
+  "pipeline": {
+    "generate_digest": true,
+    "export_notebooklm": true,
+    "generate_podcast": true,
+    "archive_outputs": true,
+    "validate_outputs": true
+  },
+  "digest": {
+    "days_back": 7,
+    "config_file": "config/weekly_aggregator.json",
+    "min_items_required": 10,
+    "max_items": 500
+  },
+  "audio": {
+    "backend": "podcastfy",
+    "config_file": "config/audio_generation.json",
+    "target_duration_minutes": 20,
+    "fallback_backend": "notebooklm_manual"
+  },
+  "output": {
+    "digest_dir": "output/weekly",
+    "notebooklm_dir": "output/notebooklm",
+    "podcast_dir": "output/podcasts",
+    "archive_dir": "output/archive",
+    "versions_dir": "output/audio_versions"
+  },
+  "distribution": {
+    "podcast_feed_dir": "/var/www/podcasts",
+    "rss_feed_file": "regen_weekly.xml",
+    "enable_auto_publish": false,
+    "notification_webhook": null
+  },
+  "schedule": {
+    "generation_day": "friday",
+    "generation_time": "10:00",
+    "timezone": "America/New_York"
+  }
+}

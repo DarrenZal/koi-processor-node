@@ -1,0 +1,33 @@
+# research_author_sensors.example.yaml — TEMPLATE (safe to commit / fork).
+#
+# WHICH authors to watch is personal config. Copy this to
+# `research_author_sensors.yaml` (gitignored) and adapt to your own watched
+# authors. The sensor loads `research_author_sensors.yaml` by default and falls
+# back to this .example only as a schema reference.
+#
+# Per author: author_id (slug), canonical_name, aliases, corpus_root (where the
+# paper corpus lives on YOUR machine — use ~ so it isn't a hardcoded path),
+# author_dir, optional official_preprints, arxiv_queries (arXiv API query
+# strings), project_tags (KOI field memberships — a paper can carry several),
+# corpus_tags, and relevance.{direct,project} keyword gates. For names that
+# collide on arXiv (e.g. a common surname), gate arxiv_queries by category/keyword.
+
+authors:
+  - author_id: example-author
+    canonical_name: Example Author
+    aliases:
+      - E. Author
+    corpus_root: ~/research/papers           # expanded per-user; never a hardcoded /Users/... path
+    author_dir: authors/example-author
+    official_preprints: https://example.edu/~author/preprints.html
+    arxiv_queries:
+      - 'au:"Example Author"'
+    project_tags:
+      - your-project
+    corpus_tags:
+      - your-topic
+    relevance:
+      direct:
+        - keyword-that-strongly-implies-relevance
+      project:
+        - broader-context-keyword

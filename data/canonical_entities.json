@@ -1,0 +1,1035 @@
+{
+  "version": "2.2.0",
+  "last_updated": "2025-12-29",
+  "description": "Canonical entity registry for Regen KOI knowledge graph deduplication - FIX-018 Added BCT/TCO2 aliases",
+  "entities": {
+    "organizations": {
+      "regen-network": {
+        "canonical_name": "Regen Network",
+        "aliases": [
+          "regen",
+          "Regen",
+          "REGEN Network",
+          "regen network",
+          "Regen Network Development",
+          "Regen Network Development Inc",
+          "Regen Network Inc",
+          "regen.network",
+          "RegenNetwork",
+          "Regen_Network",
+          "regen-network",
+          "regen_network"
+        ],
+        "canonical_uri": "https://regen.network",
+        "entity_type": "ORGANIZATION",
+        "confidence": 1.0,
+        "occurrences": 911,
+        "notes": "Primary organization behind Regen Ledger and Registry (FIX-006 expanded)"
+      },
+      "regen-registry": {
+        "canonical_name": "Regen Registry",
+        "aliases": [
+          "REGEN REGISTRY",
+          "Registry",
+          "The Registry",
+          "Regen Registry Program",
+          "regen registry"
+        ],
+        "entity_type": "ORGANIZATION",
+        "confidence": 1.0,
+        "occurrences": 212,
+        "notes": "Carbon credit registry program"
+      },
+      "regen-foundation": {
+        "canonical_name": "Regen Foundation",
+        "aliases": [
+          "regen foundation",
+          "Foundation",
+          "The Foundation",
+          "Regen Foundation Inc",
+          "the Foundation",
+          "regenfoundation",
+          "RegenFdn",
+          "regen.foundation",
+          "Regen_Foundation",
+          "regen-foundation"
+        ],
+        "entity_type": "ORGANIZATION",
+        "confidence": 1.0,
+        "occurrences": 144,
+        "notes": "Non-profit foundation supporting Regen Network (FIX-006 expanded)"
+      },
+      "ecometric": {
+        "canonical_name": "Ecometric",
+        "aliases": [
+          "ecometric",
+          "EcoMetric"
+        ],
+        "entity_type": "ORGANIZATION",
+        "confidence": 1.0,
+        "occurrences": 73
+      },
+      "hylo": {
+        "canonical_name": "Hylo",
+        "aliases": [
+          "hylo",
+          "Hylo Platform"
+        ],
+        "entity_type": "ORGANIZATION",
+        "confidence": 1.0,
+        "occurrences": 45
+      },
+      "axelar": {
+        "canonical_name": "Axelar",
+        "aliases": [
+          "axelar",
+          "Axelar Network",
+          "AXL"
+        ],
+        "entity_type": "ORGANIZATION",
+        "confidence": 1.0,
+        "occurrences": 33,
+        "notes": "Cross-chain communication protocol"
+      },
+      "osmosis": {
+        "canonical_name": "Osmosis",
+        "aliases": [
+          "osmosis",
+          "Osmosis DEX",
+          "OSMO"
+        ],
+        "entity_type": "ORGANIZATION",
+        "confidence": 1.0,
+        "occurrences": 33,
+        "notes": "Cosmos-based DEX"
+      },
+      "sharamentsa-community": {
+        "canonical_name": "Sharamentsa community",
+        "aliases": [
+          "Sharamentsa Community"
+        ],
+        "entity_type": "ORGANIZATION",
+        "confidence": 1.0,
+        "occurrences": 33
+      },
+      "celo": {
+        "canonical_name": "Celo",
+        "aliases": [
+          "CELO",
+          "Celo Network"
+        ],
+        "entity_type": "ORGANIZATION",
+        "confidence": 1.0,
+        "occurrences": 31,
+        "notes": "Mobile-first blockchain platform"
+      },
+      "commonwealth": {
+        "canonical_name": "Commonwealth",
+        "aliases": [
+          "commonwealth",
+          "Commonwealth.im"
+        ],
+        "entity_type": "ORGANIZATION",
+        "confidence": 1.0,
+        "occurrences": 29
+      },
+      "verra": {
+        "canonical_name": "Verra",
+        "aliases": [
+          "VERRA",
+          "VCS",
+          "Verified Carbon Standard"
+        ],
+        "entity_type": "ORGANIZATION",
+        "confidence": 1.0,
+        "occurrences": 28,
+        "notes": "Carbon standards organization"
+      },
+      "blockscience": {
+        "canonical_name": "Blockscience",
+        "aliases": [
+          "blockscience",
+          "BlockScience",
+          "Block Science"
+        ],
+        "entity_type": "ORGANIZATION",
+        "confidence": 1.0,
+        "occurrences": 25
+      },
+      "era-brazil": {
+        "canonical_name": "ERA Brazil",
+        "aliases": [
+          "era brazil",
+          "ERA Brazil Foundation"
+        ],
+        "entity_type": "ORGANIZATION",
+        "confidence": 1.0,
+        "occurrences": 25
+      },
+      "regen-community": {
+        "canonical_name": "Regen community",
+        "aliases": [
+          "regen community",
+          "Regen Community",
+          "REGEN community",
+          "REGEN Community"
+        ],
+        "entity_type": "ORGANIZATION",
+        "confidence": 1.0,
+        "occurrences": 24
+      },
+      "vitwit": {
+        "canonical_name": "Vitwit",
+        "aliases": [
+          "vitwit",
+          "VitWit"
+        ],
+        "entity_type": "ORGANIZATION",
+        "confidence": 1.0,
+        "occurrences": 18
+      },
+      "metamask": {
+        "canonical_name": "Metamask",
+        "aliases": [
+          "metamask",
+          "MetaMask"
+        ],
+        "entity_type": "ORGANIZATION",
+        "confidence": 1.0,
+        "occurrences": 17
+      },
+      "ecotoken": {
+        "canonical_name": "EcoToken",
+        "aliases": [
+          "ecoToken",
+          "Eco Token"
+        ],
+        "entity_type": "ORGANIZATION",
+        "confidence": 1.0,
+        "occurrences": 16
+      },
+      "foundation": {
+        "canonical_name": "Foundation",
+        "aliases": [
+          "foundation"
+        ],
+        "entity_type": "ORGANIZATION",
+        "confidence": 1.0,
+        "occurrences": 16
+      },
+      "github": {
+        "canonical_name": "GitHub",
+        "aliases": [
+          "github",
+          "Github"
+        ],
+        "entity_type": "ORGANIZATION",
+        "confidence": 1.0,
+        "occurrences": 15
+      },
+      "rnd-inc": {
+        "canonical_name": "RND Inc",
+        "aliases": [
+          "RND inc",
+          "RND INC",
+          "RND",
+          "RND, Inc",
+          "RND, Inc.",
+          "RND Inc.",
+          "Regen Network Development",
+          "Regen Network Development Inc",
+          "Regen Network Development, Inc",
+          "rnd inc",
+          "rnd-inc",
+          "RND_Inc"
+        ],
+        "entity_type": "ORGANIZATION",
+        "confidence": 1.0,
+        "occurrences": 15,
+        "notes": "Regen Network Development corporate entity (FIX-006 expanded)"
+      },
+      "seatrees": {
+        "canonical_name": "Seatrees",
+        "aliases": [
+          "SeaTrees",
+          "Sea Trees"
+        ],
+        "entity_type": "ORGANIZATION",
+        "confidence": 1.0,
+        "occurrences": 13
+      },
+      "evmos": {
+        "canonical_name": "Evmos",
+        "aliases": [
+          "EVMOS",
+          "Evmos Network"
+        ],
+        "entity_type": "ORGANIZATION",
+        "confidence": 1.0,
+        "occurrences": 13
+      },
+      "asha": {
+        "canonical_name": "Asha",
+        "aliases": [
+          "ASHA"
+        ],
+        "entity_type": "ORGANIZATION",
+        "confidence": 1.0,
+        "occurrences": 12
+      },
+      "interchain-foundation": {
+        "canonical_name": "Interchain Foundation",
+        "aliases": [
+          "ICF",
+          "Interchain Foundation",
+          "Interchain",
+          "interchain foundation"
+        ],
+        "entity_type": "ORGANIZATION",
+        "confidence": 1.0,
+        "notes": "Foundation supporting Cosmos ecosystem development"
+      },
+      "cosmos-hub": {
+        "canonical_name": "Cosmos Hub",
+        "aliases": [
+          "cosmos hub",
+          "Gaia",
+          "ATOM chain"
+        ],
+        "entity_type": "ORGANIZATION",
+        "confidence": 1.0,
+        "notes": "Primary Cosmos chain"
+      },
+      "gold-standard": {
+        "canonical_name": "Gold Standard",
+        "aliases": [
+          "gold standard",
+          "GS",
+          "Gold Standard Foundation"
+        ],
+        "entity_type": "ORGANIZATION",
+        "confidence": 1.0,
+        "notes": "Carbon credit certification body"
+      },
+      "stride": {
+        "canonical_name": "Stride",
+        "aliases": [
+          "stride",
+          "Stride Zone",
+          "STRD"
+        ],
+        "entity_type": "ORGANIZATION",
+        "confidence": 1.0,
+        "notes": "Liquid staking protocol on Cosmos"
+      },
+      "noble": {
+        "canonical_name": "Noble",
+        "aliases": [
+          "noble",
+          "Noble chain"
+        ],
+        "entity_type": "ORGANIZATION",
+        "confidence": 1.0,
+        "notes": "Native asset issuance chain in Cosmos"
+      },
+      "keplr": {
+        "canonical_name": "Keplr",
+        "aliases": [
+          "keplr",
+          "Keplr Wallet",
+          "Keplr Extension"
+        ],
+        "entity_type": "ORGANIZATION",
+        "confidence": 1.0,
+        "notes": "Cosmos ecosystem wallet"
+      },
+      "loa-labs": {
+        "canonical_name": "LOA Labs",
+        "aliases": [
+          "LOA Labs Validator",
+          "loa labs",
+          "LOA"
+        ],
+        "entity_type": "ORGANIZATION",
+        "confidence": 1.0,
+        "notes": "Validator organization"
+      },
+      "chora": {
+        "canonical_name": "Chora",
+        "aliases": [
+          "chora",
+          "Chora Validator",
+          "Chora Studios"
+        ],
+        "entity_type": "ORGANIZATION",
+        "confidence": 1.0,
+        "notes": "Validator and development organization"
+      },
+      "klima-dao": {
+        "canonical_name": "KlimaDAO",
+        "aliases": [
+          "Klima DAO",
+          "klima dao",
+          "KLIMA",
+          "Klima"
+        ],
+        "entity_type": "ORGANIZATION",
+        "confidence": 1.0,
+        "notes": "Carbon credit DAO on Polygon"
+      },
+      "toucan-protocol": {
+        "canonical_name": "Toucan Protocol",
+        "aliases": [
+          "toucan",
+          "Toucan",
+          "Toucan protocol"
+        ],
+        "entity_type": "ORGANIZATION",
+        "confidence": 1.0,
+        "notes": "Carbon credit tokenization protocol"
+      },
+      "desci-labs": {
+        "canonical_name": "DeSci Labs AG",
+        "aliases": [
+          "DeSci Labs",
+          "DeSci"
+        ],
+        "entity_type": "ORGANIZATION",
+        "confidence": 1.0,
+        "notes": "DeSci Labs organization (AG)"
+      }
+    },
+    "projects": {
+      "regen-ledger": {
+        "canonical_name": "Regen Ledger",
+        "aliases": [
+          "regen ledger",
+          "REGEN LEDGER",
+          "Ledger",
+          "Regen blockchain",
+          "Regen chain",
+          "Regen Chain",
+          "regen-ledger"
+        ],
+        "entity_type": "TECHNOLOGY",
+        "confidence": 1.0,
+        "occurrences": 283,
+        "notes": "Cosmos SDK-based blockchain"
+      },
+      "regen": {
+        "canonical_name": "Regen",
+        "aliases": [
+          "regen",
+          "REGEN"
+        ],
+        "entity_type": "TECHNOLOGY",
+        "confidence": 1.0,
+        "occurrences": 157
+      },
+      "$regen": {
+        "canonical_name": "$Regen",
+        "aliases": [
+          "$REGEN",
+          "$regen",
+          "$REGEN Coin",
+          "$REGEN Token",
+          "$REGEN token",
+          "$Regen token",
+          "Regen Coin",
+          "REGEN Coin"
+        ],
+        "entity_type": "PROJECT",
+        "confidence": 1.0,
+        "occurrences": 138
+      },
+      "desci-publish": {
+        "canonical_name": "DeSci Publish",
+        "aliases": [
+          "DeSci Publi",
+          "desci publish",
+          "DeSci Publish"
+        ],
+        "entity_type": "PROJECT",
+        "confidence": 1.0,
+        "occurrences": 78
+      },
+      "regen-marketplace": {
+        "canonical_name": "Regen Marketplace",
+        "aliases": [
+          "Regen marketplace",
+          "regen marketplace"
+        ],
+        "entity_type": "TECHNOLOGY",
+        "confidence": 1.0,
+        "occurrences": 0,
+        "notes": "Marketplace for ecological credits in the Regen ecosystem"
+      },
+      "climate-wiki": {
+        "canonical_name": "Climate Wiki",
+        "aliases": [
+          "climate wiki"
+        ],
+        "entity_type": "PROJECT",
+        "confidence": 1.0,
+        "occurrences": 27
+      },
+      "regen-token": {
+        "canonical_name": "Regen Token",
+        "aliases": [
+          "regen token",
+          "REGEN token",
+          "REGEN TOKEN"
+        ],
+        "entity_type": "PROJECT",
+        "confidence": 1.0,
+        "occurrences": 27
+      },
+      "osmosis": {
+        "canonical_name": "Osmosis",
+        "aliases": [
+          "osmosis"
+        ],
+        "entity_type": "PROJECT",
+        "confidence": 1.0,
+        "occurrences": 25
+      },
+      "cosmos": {
+        "canonical_name": "Cosmos",
+        "aliases": [
+          "cosmos"
+        ],
+        "entity_type": "PROJECT",
+        "confidence": 1.0,
+        "occurrences": 25
+      },
+      "regen-app": {
+        "canonical_name": "Regen app",
+        "aliases": [
+          "Regen App",
+          "regen app"
+        ],
+        "entity_type": "PROJECT",
+        "confidence": 1.0,
+        "occurrences": 24
+      },
+      "regen-registry-program": {
+        "canonical_name": "Regen Registry program",
+        "aliases": [
+          "Regen Registry Program"
+        ],
+        "entity_type": "PROJECT",
+        "confidence": 1.0,
+        "occurrences": 21
+      },
+      "biocultural-crediting-pilot": {
+        "canonical_name": "Biocultural crediting pilot",
+        "aliases": [
+          "Biocultural Crediting Pilot"
+        ],
+        "entity_type": "PROJECT",
+        "confidence": 1.0,
+        "occurrences": 18
+      },
+      "evmos": {
+        "canonical_name": "Evmos",
+        "aliases": [
+          "EVMOS"
+        ],
+        "entity_type": "PROJECT",
+        "confidence": 1.0,
+        "occurrences": 17
+      },
+      "daodao": {
+        "canonical_name": "DAOdao",
+        "aliases": [
+          "DAODAO",
+          "dao dao",
+          "DAO DAO"
+        ],
+        "entity_type": "PROJECT",
+        "confidence": 1.0,
+        "occurrences": 16,
+        "notes": "DAO management platform on Cosmos"
+      },
+      "usdc.noble": {
+        "canonical_name": "USDC.noble",
+        "aliases": [
+          "usdc.noble",
+          "Noble USDC"
+        ],
+        "entity_type": "PROJECT",
+        "confidence": 1.0,
+        "occurrences": 16
+      },
+      "ecocredits": {
+        "canonical_name": "Ecocredits",
+        "aliases": [
+          "ecocredits",
+          "ecoCredits",
+          "EcoCredits"
+        ],
+        "entity_type": "PROJECT",
+        "confidence": 1.0,
+        "occurrences": 15
+      },
+      "cosmos-zero": {
+        "canonical_name": "Cosmos Zero",
+        "aliases": [
+          "Cosmos ZERO"
+        ],
+        "entity_type": "PROJECT",
+        "confidence": 1.0,
+        "occurrences": 13
+      },
+      "cosmos-hub": {
+        "canonical_name": "Cosmos Hub",
+        "aliases": [
+          "cosmos hub"
+        ],
+        "entity_type": "PROJECT",
+        "confidence": 1.0,
+        "occurrences": 13
+      },
+      "hylo": {
+        "canonical_name": "Hylo",
+        "aliases": [
+          "hylo"
+        ],
+        "entity_type": "PROJECT",
+        "confidence": 1.0,
+        "occurrences": 12
+      },
+      "dregen": {
+        "canonical_name": "dRegen",
+        "aliases": [
+          "dREGEN"
+        ],
+        "entity_type": "PROJECT",
+        "confidence": 1.0,
+        "occurrences": 12
+      },
+      "ecocredit-module": {
+        "canonical_name": "Ecocredit Module",
+        "aliases": [
+          "ecocredit",
+          "eco-credit",
+          "Ecocredit",
+          "ecocredit module",
+          "regen ecocredit",
+          "x/ecocredit"
+        ],
+        "entity_type": "PROJECT",
+        "confidence": 1.0,
+        "notes": "Cosmos SDK module for ecological credits"
+      },
+      "ibc": {
+        "canonical_name": "Inter-Blockchain Communication Protocol",
+        "aliases": [
+          "IBC",
+          "IBC Protocol",
+          "Inter-Blockchain Communication",
+          "ibc"
+        ],
+        "entity_type": "PROJECT",
+        "confidence": 1.0,
+        "notes": "Cross-chain communication standard in Cosmos"
+      },
+      "cosmwasm": {
+        "canonical_name": "CosmWasm",
+        "aliases": [
+          "cosmwasm",
+          "Cosmwasm",
+          "Wasm"
+        ],
+        "entity_type": "PROJECT",
+        "confidence": 1.0,
+        "notes": "WebAssembly smart contract platform for Cosmos"
+      },
+      "tendermint": {
+        "canonical_name": "Tendermint",
+        "aliases": [
+          "tendermint",
+          "Tendermint Core",
+          "TMCore"
+        ],
+        "entity_type": "PROJECT",
+        "confidence": 1.0,
+        "notes": "Byzantine fault-tolerant consensus engine"
+      },
+      "cosmos-sdk": {
+        "canonical_name": "Cosmos SDK",
+        "aliases": [
+          "cosmos sdk",
+          "Cosmos-SDK",
+          "SDK"
+        ],
+        "entity_type": "PROJECT",
+        "confidence": 1.0,
+        "notes": "Framework for building Cosmos chains"
+      },
+      "cometbft": {
+        "canonical_name": "CometBFT",
+        "aliases": [
+          "cometbft",
+          "Comet BFT",
+          "Comet"
+        ],
+        "entity_type": "PROJECT",
+        "confidence": 1.0,
+        "notes": "Fork of Tendermint consensus"
+      },
+      "data-module": {
+        "canonical_name": "Data Module",
+        "aliases": [
+          "data module",
+          "x/data",
+          "regen.data"
+        ],
+        "entity_type": "PROJECT",
+        "confidence": 1.0,
+        "notes": "Regen module for anchoring data"
+      },
+      "baskets": {
+        "canonical_name": "Baskets",
+        "aliases": [
+          "baskets",
+          "eco baskets",
+          "Ecocredit Baskets",
+          "basket module"
+        ],
+        "entity_type": "PROJECT",
+        "confidence": 1.0,
+        "notes": "Fungible credit basket mechanism"
+      },
+      "nct": {
+        "canonical_name": "Nature Carbon Tonne",
+        "aliases": [
+          "NCT",
+          "nct",
+          "$NCT",
+          "$nct",
+          "NCT token",
+          "nct token",
+          "Nature Carbon Tonnes"
+        ],
+        "entity_type": "PROJECT",
+        "confidence": 1.0,
+        "notes": "Regen-issued basket token (Week 21b: added $ and token variants)"
+      },
+      "bct": {
+        "canonical_name": "Base Carbon Tonne",
+        "aliases": [
+          "BCT",
+          "bct",
+          "$BCT",
+          "$bct",
+          "BCT token",
+          "bct token",
+          "Base Carbon Tonnes"
+        ],
+        "entity_type": "PROJECT",
+        "confidence": 1.0,
+        "notes": "Toucan Protocol carbon basket token (FIX-018: canonical alias for graph search)"
+      },
+      "tco2": {
+        "canonical_name": "Toucan Carbon Tonne",
+        "aliases": [
+          "TCO2",
+          "tco2",
+          "TCO2 token",
+          "tco2 token",
+          "Toucan CO2",
+          "Tokenized CO2"
+        ],
+        "entity_type": "PROJECT",
+        "confidence": 1.0,
+        "notes": "Toucan Protocol tokenized carbon credit (FIX-018: canonical alias for graph search)"
+      }
+    },
+    "people": {
+      "will": {
+        "canonical_name": "Will",
+        "aliases": [
+          "WIll"
+        ],
+        "entity_type": "PERSON",
+        "confidence": 1.0,
+        "occurrences": 29
+      },
+      "becca-harman": {
+        "canonical_name": "Becca Harman",
+        "aliases": [
+          "becca harman",
+          "Rebecca Harman"
+        ],
+        "entity_type": "PERSON",
+        "confidence": 1.0,
+        "occurrences": 17
+      },
+      "jeancarlo-barrios": {
+        "canonical_name": "Jeancarlo Barrios",
+        "aliases": [
+          "JeanCarlo Barrios"
+        ],
+        "entity_type": "PERSON",
+        "confidence": 1.0,
+        "occurrences": 15
+      },
+      "regenald": {
+        "canonical_name": "Regenald",
+        "aliases": [
+          "regenald"
+        ],
+        "entity_type": "PERSON",
+        "confidence": 1.0,
+        "occurrences": 13
+      },
+      "jeancarlo": {
+        "canonical_name": "Jeancarlo",
+        "aliases": [
+          "JeanCarlo"
+        ],
+        "entity_type": "PERSON",
+        "confidence": 1.0,
+        "occurrences": 12
+      },
+      "gregory-landua": {
+        "canonical_name": "Gregory Landua",
+        "aliases": [
+          "@gregory_landua",
+          "@gregory-landua",
+          "@GregoryLandua",
+          "G. Landua",
+          "glandua",
+          "g_landua",
+          "Greg",
+          "Greg Landua",
+          "greg landua",
+          "greg-landua",
+          "Gregory",
+          "Gregory Landau",
+          "Gregory Regen",
+          "Gregory_Regen",
+          "Gregory | RND",
+          "Gregory | RND INC",
+          "Gregory0",
+          "Gregory_RND",
+          "Gregory Land",
+          "Gregory L",
+          "Landua",
+          "GregLandua",
+          "gregoryland",
+          "gregory_landua"
+        ],
+        "entity_type": "PERSON",
+        "confidence": 1.0,
+        "notes": "Co-founder of Regen Network (FIX-006 expanded)"
+      },
+      "christian-shearer": {
+        "canonical_name": "Christian Shearer",
+        "aliases": [
+          "Chris Shearer",
+          "Christian",
+          "christian shearer"
+        ],
+        "entity_type": "PERSON",
+        "confidence": 1.0,
+        "notes": "Co-founder of Regen Network"
+      },
+      "ryan-christoffersen": {
+        "canonical_name": "Ryan Christoffersen",
+        "aliases": [
+          "ryanchristo",
+          "Ryan",
+          "Ryan Christo"
+        ],
+        "entity_type": "PERSON",
+        "confidence": 1.0,
+        "notes": "Core developer and Chora validator"
+      },
+      "aaron-craelius": {
+        "canonical_name": "Aaron Craelius",
+        "aliases": [
+          "aaronc",
+          "Aaron",
+          "aaron craelius"
+        ],
+        "entity_type": "PERSON",
+        "confidence": 1.0,
+        "notes": "Core developer"
+      },
+      "zaki-manian": {
+        "canonical_name": "Zaki Manian",
+        "aliases": [
+          "zmanian",
+          "Zaki"
+        ],
+        "entity_type": "PERSON",
+        "confidence": 1.0,
+        "notes": "Cosmos ecosystem contributor"
+      },
+      "will-szal": {
+        "canonical_name": "Will Szal",
+        "aliases": [
+          "Will Szal",
+          "will szal",
+          "@willszal",
+          "@will_szal",
+          "willszal",
+          "will_szal",
+          "will-szal",
+          "WillSzal",
+          "W. Szal",
+          "Szal"
+        ],
+        "entity_type": "PERSON",
+        "confidence": 1.0,
+        "notes": "FIX-006 expanded"
+      },
+      "dave-fortson": {
+        "canonical_name": "Dave Fortson",
+        "aliases": [
+          "dave_fortson",
+          "Dave",
+          "dave fortson"
+        ],
+        "entity_type": "PERSON",
+        "confidence": 1.0,
+        "notes": "LOA Labs validator"
+      },
+      "anil-kumar": {
+        "canonical_name": "Anil Kumar",
+        "aliases": [
+          "anilcse",
+          "anil",
+          "Anil"
+        ],
+        "entity_type": "PERSON",
+        "confidence": 1.0,
+        "notes": "Core developer"
+      }
+    },
+    "concepts": {
+      "regenerative-agriculture": {
+        "canonical_name": "Regenerative Agriculture",
+        "aliases": [
+          "regenerative ag",
+          "regen ag",
+          "regenerative farming",
+          "Regenerative agriculture",
+          "regen agriculture",
+          "regenerative agriculture"
+        ],
+        "entity_type": "CONCEPT",
+        "confidence": 1.0
+      },
+      "carbon-credit": {
+        "canonical_name": "Carbon Credit",
+        "aliases": [
+          "carbon credits",
+          "Carbon Credits",
+          "carbon offset",
+          "carbon offsets",
+          "eco-credit",
+          "CO2 credits"
+        ],
+        "entity_type": "CONCEPT",
+        "confidence": 1.0
+      },
+      "proof-of-stake": {
+        "canonical_name": "Proof of Stake",
+        "aliases": [
+          "PoS",
+          "proof of stake",
+          "Proof-of-Stake",
+          "POS"
+        ],
+        "entity_type": "CONCEPT",
+        "confidence": 1.0
+      },
+      "ecological-credit": {
+        "canonical_name": "Ecological Credit",
+        "aliases": [
+          "ecological credits",
+          "eco credit",
+          "eco credits"
+        ],
+        "entity_type": "CONCEPT",
+        "confidence": 1.0
+      },
+      "mrv": {
+        "canonical_name": "Monitoring, Reporting and Verification",
+        "aliases": [
+          "MRV",
+          "mrv",
+          "monitoring reporting verification"
+        ],
+        "entity_type": "CONCEPT",
+        "confidence": 1.0,
+        "notes": "Standard for carbon credit verification"
+      },
+      "biodiversity-credit": {
+        "canonical_name": "Biodiversity Credit",
+        "aliases": [
+          "biodiversity credits",
+          "biocredits",
+          "bio credits"
+        ],
+        "entity_type": "CONCEPT",
+        "confidence": 1.0
+      },
+      "staking": {
+        "canonical_name": "Staking",
+        "aliases": [
+          "staking",
+          "stake",
+          "delegating"
+        ],
+        "entity_type": "CONCEPT",
+        "confidence": 1.0
+      },
+      "governance": {
+        "canonical_name": "Governance",
+        "aliases": [
+          "governance",
+          "on-chain governance",
+          "chain governance"
+        ],
+        "entity_type": "CONCEPT",
+        "confidence": 1.0
+      },
+      "tokenomics": {
+        "canonical_name": "Tokenomics",
+        "aliases": [
+          "tokenomics",
+          "token economics",
+          "Token Economics"
+        ],
+        "entity_type": "CONCEPT",
+        "confidence": 1.0
+      },
+      "credit-class": {
+        "canonical_name": "Credit Class",
+        "aliases": [
+          "credit class",
+          "credit classes",
+          "Credit Classes"
+        ],
+        "entity_type": "CONCEPT",
+        "confidence": 1.0,
+        "notes": "Classification of ecological credits"
+      },
+      "credit-batch": {
+        "canonical_name": "Credit Batch",
+        "aliases": [
+          "credit batch",
+          "credit batches",
+          "Credit Batches"
+        ],
+        "entity_type": "CONCEPT",
+        "confidence": 1.0,
+        "notes": "Issuance unit for ecological credits"
+      }
+    }
+  }
+}

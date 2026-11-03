@@ -1,0 +1,155 @@
+{
+  "description": "Baseline manifest for gv_koi database (Greater Victoria leaf node)",
+  "node": "gv",
+  "created_at": "2026-02-25",
+  "migrations": [
+    {
+      "id": "bkc:038_bkc_predicates",
+      "file": "038_bkc_predicates.sql",
+      "checksum": "7b5d6d6f4a6732ab90d94a299d2b1a02b9765eed364deb2166697a8bbc374804"
+    },
+    {
+      "id": "bkc:039_koi_net_events",
+      "file": "039_koi_net_events.sql",
+      "checksum": "f4afc20ff491edc3b22cc1e73a189b1b7be50e12714ec4ea247089fdb0b611de"
+    },
+    {
+      "id": "bkc:039b_ontology_mappings",
+      "file": "039b_ontology_mappings.sql",
+      "checksum": "88dfc5774197917f19c1224ab7ff5faffb29fce8d9e223b3d3efa06934a0e627"
+    },
+    {
+      "id": "bkc:040_entity_koi_rids",
+      "file": "040_entity_koi_rids.sql",
+      "checksum": "5b1cd22ef989a2a9bcb605891f9189f13213329573b4d365b8e0dc130289bcfb"
+    },
+    {
+      "id": "bkc:041_cross_references",
+      "file": "041_cross_references.sql",
+      "checksum": "88dc6f2ff541826a9d7246a91557ccf060da4f3a3e0842fe45b350110520da7d"
+    },
+    {
+      "id": "bkc:042_web_submissions",
+      "file": "042_web_submissions.sql",
+      "checksum": "aa6bd2842ea50fa71c6013ab5c71b97e835af3186bee8cdfdefde864a311a8ce"
+    },
+    {
+      "id": "bkc:043_github_code_graph",
+      "file": "043_github_code_graph.sql",
+      "checksum": "1c493497f6c9ac9599ae79d4dccd358b9207354f3623da589a27304c8e4ff8dd"
+    },
+    {
+      "id": "bkc:044_koi_memories_rag",
+      "file": "044_koi_memories_rag.sql",
+      "checksum": "7a392e1588cbdb2a0e292e9ae4ccc407cac61d2f12f0b617f3a142b2c526953e"
+    },
+    {
+      "id": "bkc:045_entity_descriptions",
+      "file": "045_entity_descriptions.sql",
+      "checksum": "f1dddb79566f899b7658008e0572b9dd83ba6089a88ea04196598fae9ebee9a7"
+    },
+    {
+      "id": "bkc:046_node_ontology_fields",
+      "file": "046_node_ontology_fields.sql",
+      "checksum": "c129566af29cb30ff397458d1716a31205acd4984b1064567c04bcb2b75e57c0"
+    },
+    {
+      "id": "bkc:047_event_dedup",
+      "file": "047_event_dedup.sql",
+      "checksum": "ea06c2a9fc7f3f728297b67e3b7520733085b7f9d075d2ff8466a74513d5dca9"
+    },
+    {
+      "id": "bkc:048_event_target_node",
+      "file": "048_event_target_node.sql",
+      "checksum": "605221f66654e35b33a1c2e0db398838436e5675713fa1974a7c4326cdeb382e"
+    },
+    {
+      "id": "bkc:049_peer_aliases",
+      "file": "049_peer_aliases.sql",
+      "checksum": "63a495c640c4cd0d85b4cdb2939eaa1098e34345435e9c9da1b72ffb496899f6"
+    },
+    {
+      "id": "bkc:050_shared_documents",
+      "file": "050_shared_documents.sql",
+      "checksum": "15015d7b0ef198169a3a15154e3df5657c2c69ba864ee9f2c3a6f91f86db1d65"
+    },
+    {
+      "id": "bkc:051_shared_documents_intake",
+      "file": "051_shared_documents_intake.sql",
+      "checksum": "5212331dd82bd0b5e1d110bee7acc7f05dffff9d81c00cbcb9559fd98f03bec9"
+    },
+    {
+      "id": "core:051_assertion_history",
+      "file": "051_assertion_history.sql",
+      "checksum": "4b225a4408d480f278ad915118576d22f658460e72894e1c06e63266a55d0b47",
+      "note": "Core invariant per ADR-001; file sourced from canonical repo"
+    },
+    {
+      "id": "bkc:052_outbound_share_ledger",
+      "file": "052_outbound_share_ledger.sql",
+      "checksum": "69e64219e19a4f50ba4b31cb331240a2ee198bf3f0e71dcb0d899a372b4bc4f6"
+    },
+    {
+      "id": "core:052_koi_migrations_registry",
+      "file": "052_koi_migrations_registry.sql",
+      "checksum": "86c17c1b424f107522683fb06d763fb5de13cce2a42d6e85268e1c1d4deaa9f9",
+      "note": "Core invariant; file sourced from canonical repo"
+    },
+    {
+      "id": "bkc:053_commons_decision_log",
+      "file": "053_commons_decision_log.sql",
+      "checksum": "0be13635869793f59bf1b0df2d69576a09e310e0d51a7194a849d26bebb06017"
+    },
+    {
+      "id": "bkc:054_commons_merge_candidates",
+      "file": "054_commons_merge_candidates.sql",
+      "checksum": "ecbe43de1328c4afd16e8433ab0a1817449036930b0cc26145ff75f936cf33e9"
+    },
+    {
+      "id": "bkc:055_cat_receipts",
+      "file": "055_cat_receipts.sql",
+      "checksum": "fab53a84933f0738c65738b02f61421869b939ea3696f12716767b61dc32a9af"
+    },
+    {
+      "id": "bkc:056_commitment_registry",
+      "file": "056_commitment_registry.sql",
+      "checksum": "3d30fcfcf2685f9fbd60cda378399715a90e929f00f23e80990f987c447c6976"
+    },
+    {
+      "id": "bkc:057_commitment_pools",
+      "file": "057_commitment_pools.sql",
+      "checksum": "2137cb8eab983810f9be922f9ce4f145cf74a6ee988682aee3c248e910c3ff77"
+    },
+    {
+      "id": "core:057_encryption_key",
+      "file": "057_encryption_key.sql",
+      "checksum": "3a9b4f5c3958d29cf1a5995ea648a5338ec3af97dab5a37ff34f0af7c1873c4f"
+    },
+    {
+      "id": "bkc:058_roadmap_predicates",
+      "file": "058_roadmap_predicates.sql",
+      "checksum": "4c1050c3eef18fb597b81fda0b0d67ad111de05817d015b23ebb466e29c1c629"
+    },
+    {
+      "id": "bkc:059_entity_graph_metrics",
+      "file": "059_entity_graph_metrics.sql",
+      "checksum": "f10f1e4cb5764c210d9408e73d86edcadd03ec31f78800c27e996892b2d5cc6f"
+    },
+    {
+      "id": "core:060_multi_peer_sync",
+      "file": "060_multi_peer_sync.sql",
+      "checksum": "83de8aa07a7f25d4ff932e8b8c1d408e1e721ec8d0a15c1ccbd0f1ae428e38ab",
+      "note": "Partial: only step 3 applied (event dedup index widened to per-target). Steps 1-2 (vault_sync_peers PK, vault_sync_state.local_edit_seq) and step 4 (vault_sync_applied_events index) skipped — 049_vault_sync never applied to BKC nodes. Safe to re-run full migration if 049 is added later."
+    },
+    {
+      "id": "bkc:061_edge_status_index",
+      "file": "061_edge_status_index.sql",
+      "checksum": "caeb0efbb547f14f425361674abb5328377e9506a85964c0796eb63c1280cd47"
+    },
+    {
+      "id": "bkc:062_visibility_scope",
+      "file": "062_visibility_scope.sql",
+      "checksum": "6ab2c5d3cd53b6eed63de49eebfcf2b24b61cad883b61ab38f5e4ac6f5bf8d78"
+    }
+  ]
+}

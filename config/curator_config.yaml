@@ -1,0 +1,167 @@
+# Daily Content Curator Configuration
+# Settings for content aggregation and curation from KOI infrastructure
+
+# Database connection
+database_url: postgresql://postgres:postgres@localhost:5433/eliza
+
+# BGE embedding server
+bge_server_url: http://localhost:8090
+
+# Content selection parameters
+hours_lookback_primary: 48      # Primary window for new content (hours)
+hours_lookback_secondary: 168   # Secondary window for fallback content (1 week)
+min_publication_confidence: 0.5 # Minimum confidence for publication dates
+
+# Thread generation settings
+max_thread_posts: 5              # Maximum posts in daily thread
+min_thread_posts: 3              # Minimum posts in daily thread
+
+# Content source priorities (higher = more important)
+source_priorities:
+  ledger: 10        # Blockchain data highest priority
+  governance: 9     # Governance proposals
+  discourse: 7      # Forum discussions
+  twitter: 6        # Social media
+  medium: 6         # Blog posts
+  website: 5        # Website updates
+  github: 4         # Code updates
+  podcast: 3        # Audio content
+
+# Keywords for content selection (with weights)
+priority_keywords:
+  governance: 10
+  proposal: 10
+  credit: 8
+  batch: 8
+  class: 7
+  methodology: 7
+  announcement: 6
+  update: 5
+  blog: 4
+  discussion: 3
+  community: 3
+  regenerative: 2
+  finance: 2
+  carbon: 2
+  biodiversity: 2
+
+# Style guide settings
+style_guide:
+  tone: professional_friendly
+  max_tweet_length: 280
+  use_emojis: true
+  emoji_map:
+    headline: "🌱"
+    stats: "📊"
+    governance: "🗳️"
+    credits: "🌿"
+    community: "💚"
+    link: "🔗"
+    announcement: "📢"
+  
+# Safety guardrails
+safety:
+  no_speculation: true           # Avoid speculative statements
+  require_verification: true      # Require verified sources
+  check_link_validity: true       # Validate all URLs
+  draft_mode_days: 7             # Days in draft-only mode
+
+# Weekly digest settings
+weekly_digest:
+  sections:
+    - executive_summary
+    - key_developments
+    - governance_updates
+    - marketplace_activity
+    - community_highlights
+  min_word_count: 800
+  max_word_count: 1200
+  include_citations: true
+
+# NotebookLM export settings
+notebooklm:
+  format: markdown
+  include_metadata: true
+  include_sources: true
+  max_sources: 50
+
+# Caching settings
+cache:
+  enable: true
+  ttl_hours: 6                   # Cache TTL in hours
+  max_entries: 1000
+
+# Logging
+logging:
+  level: INFO
+  file: logs/daily_curator.log
+  max_size_mb: 100
+  backup_count: 5
+
+# Scheduler settings (for automated runs)
+scheduler:
+  daily_cron: "0 12 * * 1-5"     # 12:00 ET weekdays
+  weekly_cron: "0 14 * * 5"      # 14:00 ET Fridays
+  timezone: "America/New_York"
+
+# Output settings
+output:
+  daily_thread_path: output/daily_threads/
+  weekly_digest_path: output/weekly_digests/
+  format: json
+  pretty_print: true
+  save_history: true
+
+# Integration endpoints
+integrations:
+  koi_coordinator: http://localhost:8000
+  koi_query_server: http://localhost:8100
+  ledger_rpc: https://regen.rpc.ping.pub/
+  registry_api: https://api.registry.regen.network/v1/
+
+# Feature flags
+features:
+  enable_trending_topics: true
+  enable_ledger_stats: true
+  enable_sentiment_analysis: false
+  enable_auto_publish: false     # Start with false, enable after testing
+  enable_duplicate_detection: true
+
+# X Bot configuration for Twitter/X posting
+x_bot:
+  # Draft mode for first week (Milestone B requirement)
+  draft_mode: true
+  draft_days: 7
+  
+  # Style guide settings (David Fortson / Many Mangos)
+  style_guide:
+    tone: professional_friendly
+    use_thread_numbers: true
+    max_tweet_length: 280
+    default_cta: "Learn more at regen.network"
+    
+  # Hashtags for posts
+  hashtags:
+    - "#RegenNetwork"
+    - "#ReFi"
+    - "#Regenerative"
+    
+  # Content validation
+  validation:
+    check_links: true
+    no_speculation: true      # Milestone B requirement
+    require_sources: true
+    timeout_seconds: 10
+    max_retries: 3
+    
+  # Review workflow
+  review:
+    require_approval_week_1: true
+    min_style_score: 0.7      # 70% minimum style compliance
+    max_invalid_links: 1      # Maximum 1 broken link allowed
+    
+  # Twitter API settings (to be configured with actual credentials)
+  twitter:
+    api_version: "v2"
+    post_time: "12:00"        # 12:00 ET as per Milestone B
+    timezone: "America/New_York"

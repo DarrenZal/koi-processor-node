@@ -1,0 +1,72 @@
+{
+  "version": "1.1.0",
+  "pipeline": {
+    "stop_on_error": false,
+    "modules": [
+      {
+        "name": "ConfidenceFilter",
+        "enabled": true,
+        "config": {
+          "entity_threshold": 0.70,
+          "relationship_threshold": 0.80,
+          "allow_null": true,
+          "strict_mode": false
+        }
+      },
+      {
+        "name": "DocumentLevelDeduplicator",
+        "enabled": true,
+        "config": {
+          "case_insensitive": true,
+          "normalize_type_case": true
+        }
+      },
+      {
+        "name": "CanonicalResolver",
+        "enabled": true,
+        "config": {
+          "update_relationships": true,
+          "allow_type_mismatch": true,
+          "use_canonical_type": true
+        }
+      },
+      {
+        "name": "OntologyNormalizer",
+        "enabled": true,
+        "config": {
+          "normalize_case": true,
+          "type_mappings": {},
+          "predicate_mappings": {}
+        },
+        "_comment": "FIX-003: Moved before ListSplitter so HumanActor->PERSON before split logic"
+      },
+      {
+        "name": "ListSplitter",
+        "enabled": true,
+        "config": {
+          "min_confidence_to_split": 0.75,
+          "max_items": 5,
+          "min_item_length": 2,
+          "enabled_types": ["PERSON", "ORGANIZATION", "PROJECT"]
+        },
+        "_comment": "FIX-003: Now sees normalized types (PERSON not HumanActor)"
+      },
+      {
+        "name": "EntityQualityFilter",
+        "enabled": true,
+        "config": {
+          "max_name_length": 80,
+          "max_word_count": 8,
+          "additional_stop_words": [],
+          "whitelist": []
+        },
+        "_comment": "FIX-003: Runs last to see normalized types and split items"
+      }
+    ]
+  },
+  "metadata": {
+    "description": "Production post-processing pipeline configuration for Regen KOI",
+    "last_updated": "2025-12-21",
+    "updated_by": "FIX-003: Pipeline ordering + ENTITY default fix"
+  }
+}

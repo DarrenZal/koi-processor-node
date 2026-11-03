@@ -1,0 +1,64 @@
+{
+  "services": {
+    "koi_coordinator": {
+      "name": "KOI Coordinator",
+      "port": 8005,
+      "host": "localhost",
+      "health_endpoint": "/health",
+      "description": "Event coordination and routing",
+      "env_var": "KOI_COORDINATOR_PORT",
+      "start_command": "KOI_COORDINATOR_PORT=8005 python3 koi_protocol/coordinator/run_coordinator.py"
+    },
+    "event_bridge": {
+      "name": "KOI Event Bridge v2",
+      "port": 8100,
+      "host": "localhost",
+      "health_endpoint": "/",
+      "description": "Event processing with RID deduplication",
+      "start_command": "python src/core/koi_event_bridge_v2.py"
+    },
+    "bge_server": {
+      "name": "BGE Embedding Server",
+      "port": 8090,
+      "host": "localhost",
+      "health_endpoint": "/health",
+      "description": "BAAI/bge-large-en-v1.5 embeddings",
+      "start_command": "python src/core/bge_server.py"
+    },
+    "mcp_server": {
+      "name": "MCP Knowledge Server",
+      "port": 8200,
+      "host": "localhost",
+      "health_endpoint": "/",
+      "description": "Agent knowledge access via MCP",
+      "start_command": "python src/core/mcp_server.py"
+    },
+    "content_dashboard": {
+      "name": "Content Operations Dashboard",
+      "port": 8400,
+      "host": "localhost",
+      "health_endpoint": "/",
+      "description": "Web dashboard for content operations",
+      "start_command": "python src/content/content_dashboard.py"
+    },
+    "postgresql": {
+      "name": "PostgreSQL Database",
+      "port": 5433,
+      "host": "localhost",
+      "description": "PostgreSQL with pgvector extension",
+      "docker_container": "gaia-postgres-1"
+    }
+  },
+  "nginx_proxy_paths": {
+    "/api/koi/coordinator/": "http://172.17.0.1:8005/",
+    "/api/koi/event-bridge/": "http://172.17.0.1:8100/",
+    "/api/koi/bge/": "http://172.17.0.1:8090/",
+    "/api/koi/mcp/": "http://172.17.0.1:8200/",
+    "/digests/": "http://172.17.0.1:8400/"
+  },
+  "notes": {
+    "docker_host_ip": "172.17.0.1",
+    "nginx_config": "/opt/projects/GAIA/nginx-ssl.conf",
+    "coordinator_needs_env": "KOI_COORDINATOR_PORT environment variable required"
+  }
+}

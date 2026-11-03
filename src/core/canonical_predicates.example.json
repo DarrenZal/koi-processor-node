@@ -1,0 +1,29 @@
+{
+  "mapping": {
+    "created": "creation",
+    "developed": "creation",
+    "built": "creation",
+    "authored": "creation",
+    "funds": "funding",
+    "finances": "funding",
+    "invests in": "funding",
+    "sponsors": "funding",
+    "partners with": "collaboration",
+    "collaborates with": "collaboration",
+    "works with": "collaboration",
+    "leads": "leadership",
+    "directs": "leadership",
+    "manages": "leadership",
+    "governs": "governance",
+    "proposal": "governance",
+    "validator": "governance",
+    "water": "water",
+    "eco-credit": "eco_credit",
+    "ecocredit": "eco_credit",
+    "treasury": "finance",
+    "stablecoin": "finance",
+    "usdc": "finance",
+    "usdt": "finance"
+  }
+}
+

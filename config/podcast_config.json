@@ -1,0 +1,23 @@
+{
+  "podcast": {
+    "title": "Pathway to Planetary Regeneration",
+    "subtitle": "Weekly insights from the Regen Network ecosystem",
+    "description": "Weekly deep dives into regenerative agriculture and Regen Network",
+    "author": "Regen Network",
+    "owner_name": "Regen Network",
+    "owner_email": "podcast@regen.network",
+    "language": "en-us",
+    "category": "Science",
+    "explicit": "no"
+  },
+  "storage_path": "./podcast",
+  "google_drive": {
+    "enabled": false,
+    "folder_id": "",
+    "credentials_path": "credentials.json"
+  },
+  "hosting": {
+    "base_url": "https://regen.network/podcast/episodes/",
+    "feed_url": "https://regen.network/podcast/feed.xml"
+  }
+}

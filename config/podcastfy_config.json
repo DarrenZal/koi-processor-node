@@ -1,0 +1,26 @@
+{
+  "output_path": "./podcast_audio",
+  "podcastfy": {
+    "model": "gpt-4o-mini",
+    "api_key_env": "OPENAI_API_KEY",
+    "tts_provider": "openai",
+    "tts_model": "tts-1",
+    "conversation_style": "informative_engaging",
+    "language": "en"
+  },
+  "audio": {
+    "format": "mp3",
+    "quality": "high",
+    "target_duration": 20,
+    "voices": {
+      "host": "alloy",
+      "cohost": "nova"
+    }
+  },
+  "content": {
+    "intro_style": "brief",
+    "outro_style": "call_to_action",
+    "segment_transitions": true,
+    "include_soundscape": false
+  }
+}

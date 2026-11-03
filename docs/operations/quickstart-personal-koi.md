@@ -90,7 +90,7 @@ Run the runner once, on the empty database, before starting the backend (the API
 tables at startup). As a superuser it applies the chain with no errors. It refuses a
 `personal_koi` that is not empty. If a run stops part-way for any other reason, drop and
 recreate the database and run it again.
-What
+`scripts/setup.sh` targets the RegenAI `eliza` database on port 5433, not this one. What
 the personal profile checks, skips, replaces and adds, and how to add a migration to an
 existing database: [fresh-install-migrations.md](fresh-install-migrations.md).
 
@@ -125,7 +125,9 @@ publications into the running backend. They read `config/rss_feeds.yaml` and
 `config/substack_publications.yaml`: copy each from its `.example.yaml` file and edit it
 (see [`config/README.md`](../../config/README.md)). The `scripts/mediawiki_*.py` tools import a
 MediaWiki. Schedule the ones you want with your platform's scheduler, from a checkout you
-do not develop in.
+do not develop in. The source identifiers and the contract for the email and session
+sensors, which live in the separate `koi-sensors` repository, are in
+[personal-sensor.md](../integration/personal-sensor.md).
 
 ## 6. Deep extraction (entities/facts/discourse)
 
@@ -181,10 +183,18 @@ Every other route has no authentication in any mode. That includes writes such a
 put a proxy in front that authenticates every request. `KOI_AUTH_MODE=enforce` alone does
 not protect a node that others can reach.
 
-Session tokens come from a sign-in service that is not in this export: nothing here
-issues them, and the 401 message's "sign in to obtain a session cookie" has no route
-behind it. The tokens you can create are the service tokens below. To test the
-session-token paths, insert a `session_tokens` row by hand. The table stores only the
+The personal API issues no session tokens. They come from Regen's sign-in service,
+`src/services/auth_service.py`, which `api/koi_content_api.py` serves under `/api/koi` on
+port 8007, bound to 0.0.0.0. It is a Google sign-in (device flow and web login, the
+`GET /api/koi/auth/web/login` that the 401 message's "sign in to obtain a session cookie"
+refers to). It accepts only `@regen.network` accounts, its redirect and verification URIs
+are hard-coded to Regen's production host, it reads Google client credentials from
+`config/client_secret.json`, and it needs PyJWT, which `requirements.txt` does not install.
+It writes tokens to `session_tokens` in the database its `POSTGRES_URL` names (default: the
+RegenAI stack's `eliza` on port 5433), so this node accepts them only if both share one
+database. Regen's TypeScript query API, `koi-query-api.ts`, has its own session-token code.
+Outside Regen's deployment, the tokens you can create are the service tokens below. To
+test the session-token paths, insert a `session_tokens` row by hand. The table stores only the
 SHA-256 hex digest of the token (`token_hash`), never the token itself:
 
 ```bash

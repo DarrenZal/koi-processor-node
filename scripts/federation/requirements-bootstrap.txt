@@ -1,0 +1,25 @@
+# Minimal runtime requirements for federation bootstrap on blank hosts.
+# This file intentionally excludes optional integrations and heavy pipelines.
+
+# API/runtime core
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+pydantic>=2.10.0,<3.0.0
+typing-extensions>=4.12.2
+python-dotenv>=1.0.0
+pyyaml==6.0.1
+
+# Database/network
+asyncpg==0.30.0
+psycopg2-binary>=2.9.9
+pgvector==0.2.4
+httpx==0.25.2
+requests==2.31.0
+aiohttp>=3.9.0
+
+# Required by currently imported modules
+metaphone>=0.6
+beautifulsoup4==4.13.5
+python-dateutil==2.8.2
+cryptography>=42.0.0
+watchdog>=4.0.0

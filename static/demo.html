@@ -1,0 +1,1214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Claims Engine — Regen Network</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            regen: { 50: '#f0fdf4', 100: '#dcfce7', 200: '#bbf7d0', 400: '#4ade80', 500: '#22c55e', 600: '#16a34a', 700: '#15803d', 800: '#166534', 900: '#14532d' },
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+    body { font-family: 'Inter', sans-serif; }
+    .slide-over { transform: translateX(100%); transition: transform 0.3s ease; }
+    .slide-over.open { transform: translateX(0); }
+    .fade-in { animation: fadeIn 0.3s ease; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+    .toast { animation: toastIn 0.3s ease, toastOut 0.3s ease 2.7s forwards; }
+    @keyframes toastIn { from { opacity: 0; transform: translateY(-20px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes toastOut { from { opacity: 1; } to { opacity: 0; } }
+    .spinner { border: 2px solid #e5e7eb; border-top: 2px solid #16a34a; border-radius: 50%; width: 16px; height: 16px; animation: spin 0.6s linear infinite; display: inline-block; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .state-node { transition: all 0.2s; }
+    .state-node.active { transform: scale(1.1); }
+    .tab-btn.active { border-color: #16a34a; color: #16a34a; }
+  </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+  <!-- Toast container -->
+  <div id="toasts" class="fixed top-4 right-4 z-50 space-y-2"></div>
+
+  <!-- Header -->
+  <header class="bg-white border-b border-gray-200 sticky top-0 z-40">
+    <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-8 h-8 bg-regen-600 rounded-lg flex items-center justify-center">
+          <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+        </div>
+        <h1 class="text-lg font-semibold text-gray-900">Claims Engine</h1>
+        <span class="text-xs bg-regen-100 text-regen-700 px-2 py-0.5 rounded-full font-medium">v2</span>
+      </div>
+      <div class="flex items-center gap-2 text-sm text-gray-500">
+        <span class="inline-block w-2 h-2 bg-green-500 rounded-full"></span>
+        <span id="serverStatus">Connected</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Navigation Tabs -->
+  <nav class="bg-white border-b border-gray-200">
+    <div class="max-w-7xl mx-auto px-4 flex gap-1">
+      <button onclick="showTab('dashboard')" class="tab-btn active px-4 py-3 text-sm font-medium border-b-2 border-transparent hover:text-regen-600 transition" data-tab="dashboard">Dashboard</button>
+      <button onclick="showTab('browser')" class="tab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent hover:text-regen-600 transition" data-tab="browser">Claims Browser</button>
+      <button onclick="showTab('extract')" class="tab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent hover:text-regen-600 transition" data-tab="extract">AI Extraction</button>
+      <button onclick="showTab('create')" class="tab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent hover:text-regen-600 transition" data-tab="create">Create Claim</button>
+    </div>
+  </nav>
+
+  <!-- Main Content -->
+  <main class="max-w-7xl mx-auto px-4 py-6">
+
+    <!-- ==================== DASHBOARD ==================== -->
+    <section id="tab-dashboard" class="tab-content">
+      <!-- Stats Cards -->
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+        <div class="bg-white rounded-xl p-5 border border-gray-200 shadow-sm">
+          <div class="text-3xl font-bold text-gray-900" id="stat-total">—</div>
+          <div class="text-sm text-gray-500 mt-1">Total Claims</div>
+        </div>
+        <div class="bg-white rounded-xl p-5 border border-gray-200 shadow-sm">
+          <div class="text-3xl font-bold text-regen-600" id="stat-verified">—</div>
+          <div class="text-sm text-gray-500 mt-1">Verified</div>
+        </div>
+        <div class="bg-white rounded-xl p-5 border border-gray-200 shadow-sm">
+          <div class="text-3xl font-bold text-amber-500" id="stat-ai">—</div>
+          <div class="text-sm text-gray-500 mt-1">AI-Extracted</div>
+        </div>
+        <div class="bg-white rounded-xl p-5 border border-gray-200 shadow-sm">
+          <div class="text-3xl font-bold text-yellow-600" id="stat-anchored">—</div>
+          <div class="text-sm text-gray-500 mt-1">On-Chain</div>
+        </div>
+      </div>
+
+      <!-- Breakdowns -->
+      <div class="grid md:grid-cols-3 gap-4 mb-6">
+        <!-- By Status -->
+        <div class="bg-white rounded-xl p-5 border border-gray-200 shadow-sm">
+          <h3 class="text-sm font-semibold text-gray-700 mb-3">By Status</h3>
+          <div id="breakdown-status" class="space-y-2"></div>
+        </div>
+        <!-- By Type -->
+        <div class="bg-white rounded-xl p-5 border border-gray-200 shadow-sm">
+          <h3 class="text-sm font-semibold text-gray-700 mb-3">By Type</h3>
+          <div id="breakdown-type" class="space-y-2"></div>
+        </div>
+        <!-- By Organization -->
+        <div class="bg-white rounded-xl p-5 border border-gray-200 shadow-sm">
+          <h3 class="text-sm font-semibold text-gray-700 mb-3">By Organization</h3>
+          <div id="breakdown-org" class="space-y-2"></div>
+        </div>
+      </div>
+
+      <!-- Pipeline Visual -->
+      <div class="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
+        <h3 class="text-sm font-semibold text-gray-700 mb-4">Claims Pipeline</h3>
+        <div class="flex items-center justify-between max-w-2xl mx-auto">
+          <div class="text-center">
+            <div class="w-14 h-14 rounded-full bg-gray-100 border-2 border-gray-300 flex items-center justify-center text-lg font-bold text-gray-600" id="pipe-self">—</div>
+            <div class="text-xs text-gray-500 mt-2">Self-Reported</div>
+          </div>
+          <div class="flex-1 h-0.5 bg-gray-200 mx-2"></div>
+          <div class="text-center">
+            <div class="w-14 h-14 rounded-full bg-blue-50 border-2 border-blue-300 flex items-center justify-center text-lg font-bold text-blue-600" id="pipe-peer">—</div>
+            <div class="text-xs text-gray-500 mt-2">Peer Reviewed</div>
+          </div>
+          <div class="flex-1 h-0.5 bg-gray-200 mx-2"></div>
+          <div class="text-center">
+            <div class="w-14 h-14 rounded-full bg-green-50 border-2 border-green-300 flex items-center justify-center text-lg font-bold text-green-600" id="pipe-verified">—</div>
+            <div class="text-xs text-gray-500 mt-2">Verified</div>
+          </div>
+          <div class="flex-1 h-0.5 bg-gray-200 mx-2"></div>
+          <div class="text-center">
+            <div class="w-14 h-14 rounded-full bg-yellow-50 border-2 border-yellow-300 flex items-center justify-center text-lg font-bold text-yellow-600" id="pipe-anchored">—</div>
+            <div class="text-xs text-gray-500 mt-2">On-Chain</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== CLAIMS BROWSER ==================== -->
+    <section id="tab-browser" class="tab-content hidden">
+      <!-- Filters -->
+      <div class="flex flex-wrap gap-3 mb-4">
+        <select id="filter-status" onchange="loadClaims()" class="bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-regen-500 focus:border-regen-500">
+          <option value="">All Statuses</option>
+          <option value="self_reported">Self-Reported</option>
+          <option value="peer_reviewed">Peer Reviewed</option>
+          <option value="verified">Verified</option>
+          <option value="ledger_anchored">Anchored</option>
+        </select>
+        <select id="filter-type" onchange="loadClaims()" class="bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-regen-500 focus:border-regen-500">
+          <option value="">All Types</option>
+          <option value="ecological">Ecological</option>
+          <option value="social">Social</option>
+          <option value="financial">Financial</option>
+          <option value="governance">Governance</option>
+        </select>
+        <select id="filter-claimant" onchange="loadClaims()" class="bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-regen-500 focus:border-regen-500">
+          <option value="">All Organizations</option>
+        </select>
+        <button onclick="loadClaims()" class="ml-auto bg-regen-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-regen-700 transition">Refresh</button>
+      </div>
+
+      <!-- Claims Table -->
+      <div class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+        <div class="overflow-x-auto">
+          <table class="w-full">
+            <thead>
+              <tr class="bg-gray-50 border-b border-gray-200">
+                <th class="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Statement</th>
+                <th class="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Organization</th>
+                <th class="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Type</th>
+                <th class="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Status</th>
+                <th class="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Confidence</th>
+                <th class="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Created</th>
+              </tr>
+            </thead>
+            <tbody id="claims-table" class="divide-y divide-gray-100"></tbody>
+          </table>
+        </div>
+        <div id="claims-loading" class="text-center py-8 text-gray-400">
+          <div class="spinner mx-auto mb-2"></div>
+          Loading claims...
+        </div>
+        <div id="claims-empty" class="text-center py-8 text-gray-400 hidden">No claims found.</div>
+      </div>
+    </section>
+
+    <!-- ==================== AI EXTRACTION ==================== -->
+    <section id="tab-extract" class="tab-content hidden">
+      <div class="grid md:grid-cols-2 gap-6">
+        <!-- Input -->
+        <div>
+          <div class="bg-white rounded-xl p-5 border border-gray-200 shadow-sm">
+            <h3 class="text-sm font-semibold text-gray-700 mb-3">Document Text</h3>
+            <textarea id="extract-text" rows="10" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-regen-500 focus:border-regen-500 resize-none" placeholder="Paste impact report text here..."></textarea>
+            <div class="flex gap-2 mt-3">
+              <button onclick="runExtraction()" id="btn-extract" class="bg-regen-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-regen-700 transition flex items-center gap-2">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                Extract Claims
+              </button>
+              <button onclick="loadExample()" class="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-200 transition">Load Example</button>
+            </div>
+          </div>
+        </div>
+        <!-- Results -->
+        <div>
+          <div class="bg-white rounded-xl p-5 border border-gray-200 shadow-sm min-h-[300px]">
+            <div class="flex items-center justify-between mb-3">
+              <h3 class="text-sm font-semibold text-gray-700">Extracted Claims</h3>
+              <button onclick="createAllExtracted()" id="btn-create-all" class="hidden bg-regen-600 text-white px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-regen-700 transition">Create All</button>
+            </div>
+            <div id="extract-results" class="space-y-3">
+              <p class="text-sm text-gray-400 text-center py-8">Results will appear here after extraction.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== CREATE CLAIM ==================== -->
+    <section id="tab-create" class="tab-content hidden">
+      <div class="max-w-2xl">
+        <div class="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
+          <h3 class="text-sm font-semibold text-gray-700 mb-4">New Claim</h3>
+          <form onsubmit="submitClaim(event)" class="space-y-4">
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Claimant Organization</label>
+              <select id="create-claimant" required class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-regen-500 focus:border-regen-500">
+                <option value="">Select organization...</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Statement</label>
+              <textarea id="create-statement" required rows="3" minlength="10" maxlength="5000" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-regen-500 focus:border-regen-500" placeholder="Describe the impact claim..."></textarea>
+            </div>
+            <div class="grid grid-cols-2 gap-4">
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Type</label>
+                <select id="create-type" required class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-regen-500 focus:border-regen-500">
+                  <option value="ecological">Ecological</option>
+                  <option value="social">Social</option>
+                  <option value="financial">Financial</option>
+                  <option value="governance">Governance</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">About Entity <span class="text-gray-400">(optional)</span></label>
+                <input id="create-about" type="text" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-regen-500 focus:border-regen-500" placeholder="Search entities..." oninput="searchAboutEntity(this.value)">
+                <div id="about-suggestions" class="hidden absolute bg-white border border-gray-200 rounded-lg shadow-lg mt-1 max-h-40 overflow-y-auto z-10"></div>
+                <input type="hidden" id="create-about-uri">
+              </div>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Metadata <span class="text-gray-400">(JSON, optional)</span></label>
+              <textarea id="create-metadata" rows="3" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono text-xs focus:ring-2 focus:ring-regen-500 focus:border-regen-500">{"quantity": "", "unit": "", "start_date": ""}</textarea>
+            </div>
+            <button type="submit" class="bg-regen-600 text-white px-5 py-2.5 rounded-lg text-sm font-medium hover:bg-regen-700 transition">Create Claim</button>
+          </form>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- ==================== DETAIL SLIDE-OVER ==================== -->
+  <div id="detail-overlay" class="fixed inset-0 bg-black/20 z-40 hidden" onclick="closeDetail()"></div>
+  <aside id="detail-panel" class="slide-over fixed top-0 right-0 h-full w-full max-w-xl bg-white shadow-2xl z-50 overflow-y-auto">
+    <div class="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between z-10">
+      <h2 class="text-base font-semibold text-gray-900">Claim Detail</h2>
+      <button onclick="closeDetail()" class="text-gray-400 hover:text-gray-600">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div id="detail-content" class="p-6 space-y-6"></div>
+  </aside>
+
+  <script>
+    // ==================== CONFIG ====================
+    const API_BASE = window.location.origin;
+
+    // Cache
+    let allClaims = [];
+    let orgMap = {}; // uri → name
+    let orgList = []; // [{uri, name}]
+    let extractedCandidates = [];
+
+    // ==================== INIT ====================
+    document.addEventListener('DOMContentLoaded', async () => {
+      // Fetch chain info and show testnet badge if applicable
+      try {
+        const { data: chainInfo } = await api('/claims/chain-info');
+        if (chainInfo.is_testnet) {
+          const badge = document.createElement('span');
+          badge.className = 'text-xs bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded-full font-medium border border-yellow-300';
+          badge.textContent = 'TESTNET';
+          const v2Badge = document.querySelector('header .text-xs.bg-regen-100');
+          if (v2Badge) v2Badge.parentNode.insertBefore(badge, v2Badge.nextSibling);
+        }
+        const statusEl = document.getElementById('serverStatus');
+        if (statusEl) statusEl.textContent = 'Connected — ' + chainInfo.chain_id;
+      } catch (e) {
+        console.warn('Failed to fetch chain info:', e);
+      }
+
+      await Promise.all([loadAllClaims(), loadOrgs()]);
+      // Enrich orgList/orgMap from claims so claimants appear in dropdowns
+      // even if their entity_type isn't ORGANIZATION
+      allClaims.forEach(c => {
+        if (c.claimant_name && c.claimant_uri && !orgMap[c.claimant_uri]) {
+          orgMap[c.claimant_uri] = c.claimant_name;
+          orgList.push({ uri: c.claimant_uri, name: c.claimant_name });
+        }
+      });
+      orgList.sort((a, b) => a.name.localeCompare(b.name));
+      populateOrgDropdowns();
+      renderDashboard();
+    });
+
+    // ==================== API HELPERS ====================
+    async function api(path, opts = {}) {
+      const url = `${API_BASE}${path}`;
+      const res = await fetch(url, {
+        headers: { 'Content-Type': 'application/json', ...opts.headers },
+        ...opts,
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: res.statusText }));
+        throw new Error(err.detail || `HTTP ${res.status}`);
+      }
+      return { data: await res.json(), status: res.status };
+    }
+
+    // ==================== DATA LOADING ====================
+    async function loadAllClaims() {
+      try {
+        const { data } = await api('/claims/?limit=200');
+        allClaims = data;
+      } catch (e) {
+        toast('Failed to load claims: ' + e.message, 'error');
+        allClaims = [];
+      }
+    }
+
+    async function loadOrgs() {
+      try {
+        const [res1, res2] = await Promise.all([
+          api('/entities?entity_type=Organization&limit=200').catch(() => ({ data: { entities: [] } })),
+          api('/entities?entity_type=ORGANIZATION&limit=200').catch(() => ({ data: { entities: [] } })),
+        ]);
+        const entities1 = res1.data.entities || res1.data || [];
+        const entities2 = res2.data.entities || res2.data || [];
+        const seen = new Set();
+        const merged = [];
+        for (const e of [...entities1, ...entities2]) {
+          if (!seen.has(e.fuseki_uri)) { seen.add(e.fuseki_uri); merged.push(e); }
+        }
+        orgList = merged.map(e => ({ uri: e.fuseki_uri, name: e.entity_text }))
+          .sort((a, b) => a.name.localeCompare(b.name));
+        orgMap = Object.fromEntries(orgList.map(o => [o.uri, o.name]));
+        populateOrgDropdowns();
+      } catch (e) {
+        console.warn('Failed to load orgs:', e);
+      }
+    }
+
+    function populateOrgDropdowns() {
+      const selects = [document.getElementById('filter-claimant'), document.getElementById('create-claimant')];
+      selects.forEach(sel => {
+        if (!sel) return;
+        const val = sel.value;
+        const firstOpt = sel.querySelector('option');
+        sel.innerHTML = '';
+        sel.appendChild(firstOpt);
+        orgList.forEach(o => {
+          const opt = document.createElement('option');
+          opt.value = o.uri;
+          opt.textContent = o.name;
+          sel.appendChild(opt);
+        });
+        sel.value = val;
+      });
+    }
+
+    function resolveOrgName(uri, claim) {
+      if (!uri) return 'Unknown';
+      if (claim && claim.claimant_name) return claim.claimant_name;
+      if (orgMap[uri]) return orgMap[uri];
+      // Extract readable name from URI
+      const match = uri.match(/(?:organization|concept)-(.+?)-[a-f0-9]+$/);
+      if (match) return match[1].replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+      return uri.split(':').pop().substring(0, 30);
+    }
+
+    // ==================== DASHBOARD ====================
+    function renderDashboard() {
+      const total = allClaims.length;
+      const byStatus = countBy(allClaims, 'verification');
+      const byType = countBy(allClaims, 'claim_type');
+      const byOrg = {};
+      allClaims.forEach(c => {
+        const name = resolveOrgName(c.claimant_uri, c);
+        byOrg[name] = (byOrg[name] || 0) + 1;
+      });
+      const aiCount = allClaims.filter(c => c.ai_confidence != null).length;
+
+      // Stats
+      document.getElementById('stat-total').textContent = total;
+      document.getElementById('stat-verified').textContent = (byStatus.verified || 0) + (byStatus.ledger_anchored || 0);
+      document.getElementById('stat-ai').textContent = aiCount;
+      document.getElementById('stat-anchored').textContent = byStatus.ledger_anchored || 0;
+
+      // Pipeline
+      document.getElementById('pipe-self').textContent = byStatus.self_reported || 0;
+      document.getElementById('pipe-peer').textContent = byStatus.peer_reviewed || 0;
+      document.getElementById('pipe-verified').textContent = byStatus.verified || 0;
+      document.getElementById('pipe-anchored').textContent = byStatus.ledger_anchored || 0;
+
+      // Breakdowns
+      renderBreakdown('breakdown-status', byStatus, statusColor);
+      renderBreakdown('breakdown-type', byType, typeColor);
+      renderBreakdown('breakdown-org', byOrg, () => 'bg-regen-100 text-regen-700');
+    }
+
+    function renderBreakdown(id, data, colorFn) {
+      const el = document.getElementById(id);
+      const total = Object.values(data).reduce((a, b) => a + b, 0) || 1;
+      el.innerHTML = Object.entries(data)
+        .sort((a, b) => b[1] - a[1])
+        .map(([key, count]) => {
+          const pct = Math.round(count / total * 100);
+          const colors = colorFn(key);
+          return `
+            <div class="flex items-center justify-between text-sm">
+              <div class="flex items-center gap-2">
+                <span class="inline-block px-2 py-0.5 rounded-full text-xs font-medium ${colors}">${formatLabel(key)}</span>
+              </div>
+              <div class="flex items-center gap-2">
+                <div class="w-20 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                  <div class="h-full rounded-full ${colors.split(' ')[0]}" style="width:${pct}%"></div>
+                </div>
+                <span class="text-gray-600 font-medium w-8 text-right">${count}</span>
+              </div>
+            </div>`;
+        }).join('');
+    }
+
+    // ==================== CLAIMS BROWSER ====================
+    function loadClaims() {
+      const status = document.getElementById('filter-status').value;
+      const type = document.getElementById('filter-type').value;
+      const claimant = document.getElementById('filter-claimant').value;
+
+      let filtered = allClaims;
+      if (status) filtered = filtered.filter(c => c.verification === status);
+      if (type) filtered = filtered.filter(c => c.claim_type === type);
+      if (claimant) filtered = filtered.filter(c => c.claimant_uri === claimant);
+
+      renderClaimsTable(filtered);
+    }
+
+    function renderClaimsTable(claims) {
+      const tbody = document.getElementById('claims-table');
+      const loading = document.getElementById('claims-loading');
+      const empty = document.getElementById('claims-empty');
+      loading.classList.add('hidden');
+
+      if (claims.length === 0) {
+        empty.classList.remove('hidden');
+        tbody.innerHTML = '';
+        return;
+      }
+      empty.classList.add('hidden');
+
+      tbody.innerHTML = claims.map(c => `
+        <tr class="hover:bg-gray-50 cursor-pointer transition" data-rid="${escAttr(c.claim_rid)}">
+          <td class="px-4 py-3 text-sm text-gray-900 max-w-xs truncate">${escHtml(c.statement.substring(0, 100))}${c.statement.length > 100 ? '...' : ''}</td>
+          <td class="px-4 py-3 text-sm text-gray-600">${escHtml(resolveOrgName(c.claimant_uri, c))}</td>
+          <td class="px-4 py-3"><span class="inline-block px-2 py-0.5 rounded-full text-xs font-medium ${typeColor(c.claim_type)}">${formatLabel(c.claim_type)}</span></td>
+          <td class="px-4 py-3"><span class="inline-block px-2 py-0.5 rounded-full text-xs font-medium ${statusColor(c.verification)}">${formatLabel(c.verification)}</span></td>
+          <td class="px-4 py-3 text-sm text-gray-600">${c.ai_confidence != null ? (c.ai_confidence * 100).toFixed(0) + '%' : '—'}</td>
+          <td class="px-4 py-3 text-sm text-gray-500">${formatDate(c.created_at)}</td>
+        </tr>
+      `).join('');
+      tbody.querySelectorAll('tr[data-rid]').forEach(tr => {
+        tr.addEventListener('click', () => openDetail(tr.dataset.rid));
+      });
+    }
+
+    // ==================== CLAIM DETAIL ====================
+    async function openDetail(rid) {
+      const overlay = document.getElementById('detail-overlay');
+      const panel = document.getElementById('detail-panel');
+      const content = document.getElementById('detail-content');
+
+      overlay.classList.remove('hidden');
+      panel.classList.add('open');
+      content.innerHTML = '<div class="text-center py-12"><div class="spinner mx-auto mb-2"></div>Loading...</div>';
+
+      try {
+        const [claimRes, historyRes, attRes] = await Promise.all([
+          api(`/claims/${encodeURIComponent(rid)}`),
+          api(`/claims/${encodeURIComponent(rid)}/history`),
+          api(`/claims/${encodeURIComponent(rid)}/attestations`).catch(() => ({ data: [] })),
+        ]);
+        const claim = claimRes.data;
+        const history = historyRes.data;
+        const attestations = attRes.data || [];
+        renderDetail(claim, history, attestations);
+      } catch (e) {
+        content.innerHTML = `<p class="text-red-500">Error: ${escHtml(e.message)}</p>`;
+      }
+    }
+
+    function renderDetail(claim, history, attestations) {
+      attestations = attestations || [];
+      const content = document.getElementById('detail-content');
+      const transitions = history.transitions || [];
+      const evidence = claim.evidence || [];
+
+      content.innerHTML = `
+        <!-- Statement -->
+        <div>
+          <h3 class="text-xs font-semibold text-gray-400 uppercase mb-1">Statement</h3>
+          <p class="text-sm text-gray-900 leading-relaxed">${escHtml(claim.statement)}</p>
+        </div>
+
+        <!-- Status & Metadata Row -->
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <h3 class="text-xs font-semibold text-gray-400 uppercase mb-1">Status</h3>
+            <span class="inline-block px-2.5 py-1 rounded-full text-xs font-medium ${statusColor(claim.verification)}">${formatLabel(claim.verification)}</span>
+          </div>
+          <div>
+            <h3 class="text-xs font-semibold text-gray-400 uppercase mb-1">Type</h3>
+            <span class="inline-block px-2.5 py-1 rounded-full text-xs font-medium ${typeColor(claim.claim_type)}">${formatLabel(claim.claim_type)}</span>
+          </div>
+          <div>
+            <h3 class="text-xs font-semibold text-gray-400 uppercase mb-1">Organization</h3>
+            <p class="text-sm text-gray-700">${escHtml(resolveOrgName(claim.claimant_uri, claim))}</p>
+          </div>
+          <div>
+            <h3 class="text-xs font-semibold text-gray-400 uppercase mb-1">AI Confidence</h3>
+            <p class="text-sm text-gray-700">${claim.ai_confidence != null ? (claim.ai_confidence * 100).toFixed(0) + '%' : 'Manual'}</p>
+          </div>
+        </div>
+
+        <!-- Metadata -->
+        ${claim.metadata && Object.keys(claim.metadata).length ? `
+        <div>
+          <h3 class="text-xs font-semibold text-gray-400 uppercase mb-1">Metadata</h3>
+          <div class="bg-gray-50 rounded-lg p-3 text-xs font-mono text-gray-700 overflow-x-auto">${escHtml(JSON.stringify(claim.metadata, null, 2))}</div>
+        </div>` : ''}
+
+        <!-- Anchor Info -->
+        ${claim.content_hash || claim.tx_hash ? `
+        <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+          <h3 class="text-xs font-semibold text-yellow-800 uppercase mb-2">Blockchain Anchor</h3>
+          ${claim.content_hash ? `<div class="text-xs mb-1"><span class="text-yellow-700 font-medium">Content Hash:</span> <code class="text-yellow-900">${claim.content_hash.substring(0, 24)}...</code></div>` : ''}
+          ${claim.ledger_iri ? `<div class="text-xs mb-1"><span class="text-yellow-700 font-medium">Ledger IRI:</span> <code class="text-yellow-900">${escHtml(claim.ledger_iri)}</code></div>` : ''}
+          ${claim.tx_hash ? `<div class="text-xs mb-1"><span class="text-yellow-700 font-medium">Tx Hash:</span> <a href="https://www.mintscan.io/regen/tx/${claim.tx_hash}" target="_blank" class="text-blue-600 hover:underline"><code>${claim.tx_hash.substring(0, 24)}...</code></a></div>` : ''}
+          ${claim.verification === 'ledger_anchored' ? `<button onclick="window.open(API_BASE + '/claims/' + encodeURIComponent('${escAttr(claim.claim_rid)}') + '/proof-pack?format=download')" class="mt-2 bg-yellow-600 text-white px-3 py-1.5 rounded text-xs font-medium hover:bg-yellow-700 transition">Download Verification Bundle</button>` : ''}
+        </div>` : ''}
+
+        <!-- Evidence -->
+        <div>
+          <h3 class="text-xs font-semibold text-gray-400 uppercase mb-2">Evidence (${evidence.length})</h3>
+          ${evidence.length ? evidence.map(e => `
+            <div class="bg-gray-50 rounded-lg p-3 mb-2 text-sm">
+              <div class="font-medium text-gray-800">${escHtml(e.text || e.uri)}</div>
+              <div class="text-xs text-gray-500 mt-1">${escHtml(e.type || '')} ${e.confidence != null ? `· Confidence: ${(e.confidence * 100).toFixed(0)}%` : ''}</div>
+            </div>
+          `).join('') : '<p class="text-sm text-gray-400">No evidence linked yet.</p>'}
+        </div>
+
+        <!-- Attestations (V2) -->
+        <div>
+          <h3 class="text-xs font-semibold text-gray-400 uppercase mb-2">Attestations (${attestations.length})</h3>
+          ${renderAttestationPolicy(claim, attestations)}
+          ${attestations.length ? attestations.map(a => `
+            <div class="bg-gray-50 rounded-lg p-3 mb-2 text-sm">
+              <div class="flex items-center justify-between">
+                <span class="font-medium text-gray-800">${escHtml(a.reviewer_name || a.reviewer_uri)}</span>
+                <span class="inline-block px-2 py-0.5 rounded-full text-xs font-medium ${verdictColor(a.verdict)}">${escHtml(a.verdict)}</span>
+              </div>
+              ${a.rationale ? `<div class="text-xs text-gray-500 mt-1">${escHtml(a.rationale)}</div>` : ''}
+              ${a.attest_tx_hash ? `<div class="text-xs text-yellow-600 mt-1">Anchored: <a href="https://www.mintscan.io/regen/tx/${a.attest_tx_hash}" target="_blank" class="hover:underline"><code>${a.attest_tx_hash.substring(0, 16)}...</code></a></div>` : ''}
+              <div class="text-xs text-gray-400 mt-1">${formatDateTime(a.created_at)}</div>
+            </div>
+          `).join('') : '<p class="text-sm text-gray-400 mb-2">No attestations yet.</p>'}
+          ${renderAttestationForm(claim)}
+        </div>
+
+        <!-- Audit Trail -->
+        <div>
+          <h3 class="text-xs font-semibold text-gray-400 uppercase mb-2">Audit Trail</h3>
+          <div class="space-y-2">
+            ${transitions.map(t => `
+              <div class="flex items-start gap-3 text-sm">
+                <div class="w-2 h-2 rounded-full mt-1.5 ${statusDotColor(t.to_state)}"></div>
+                <div>
+                  <div class="text-gray-800"><span class="font-medium">${formatLabel(t.to_state)}</span>${t.actor ? ` by ${escHtml(t.actor)}` : ''}</div>
+                  ${t.reason ? `<div class="text-gray-500 text-xs">${escHtml(t.reason)}</div>` : ''}
+                  <div class="text-gray-400 text-xs">${formatDateTime(t.created_at)}</div>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+
+        <!-- State Machine -->
+        <div class="border-t border-gray-200 pt-4">
+          <h3 class="text-xs font-semibold text-gray-400 uppercase mb-3">State Machine</h3>
+          <div class="flex items-center gap-1 text-xs mb-4">
+            ${['self_reported', 'peer_reviewed', 'verified', 'ledger_anchored'].map(s => `
+              <div class="state-node px-2 py-1 rounded ${claim.verification === s ? statusColor(s) + ' ring-2 ring-offset-1 ring-regen-400' : 'bg-gray-100 text-gray-400'}">${formatLabel(s)}</div>
+              ${s !== 'ledger_anchored' ? '<svg class="w-4 h-4 text-gray-300 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>' : ''}
+            `).join('')}
+          </div>
+
+          <!-- Verification Actions -->
+          ${renderVerifyActions(claim)}
+
+          <!-- Anchor Actions -->
+          ${renderAnchorActions(claim)}
+        </div>
+
+        <!-- RID -->
+        <div class="border-t border-gray-200 pt-4">
+          <h3 class="text-xs font-semibold text-gray-400 uppercase mb-1">Claim RID</h3>
+          <code class="text-xs text-gray-500 break-all">${escHtml(claim.claim_rid)}</code>
+        </div>
+      `;
+      // Bind action buttons (XSS-safe: no inline onclick with unsanitized strings)
+      content.querySelectorAll('[data-action][data-rid]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const rid = btn.dataset.rid;
+          const action = btn.dataset.action;
+          if (action === 'verify') verifyClaim(rid);
+          else if (action === 'prepare') prepareAnchor(rid);
+          else if (action === 'broadcast') broadcastAnchor(rid);
+          else if (action === 'reconcile') reconcileAnchor(rid);
+          else if (action === 'attest') submitAttestation(rid);
+        });
+      });
+    }
+
+    function renderVerifyActions(claim) {
+      const nextStates = {
+        self_reported: ['peer_reviewed', 'withdrawn'],
+        peer_reviewed: ['verified', 'withdrawn'],
+        verified: [],
+        ledger_anchored: [],
+        withdrawn: [],
+      };
+      const options = nextStates[claim.verification] || [];
+      if (options.length === 0) return '';
+
+      return `
+        <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-3">
+          <h4 class="text-xs font-semibold text-blue-800 mb-2">Advance Verification</h4>
+          <div class="space-y-2">
+            <select id="verify-level" class="w-full border border-blue-300 rounded px-2 py-1.5 text-sm bg-white">
+              ${options.map(s => `<option value="${s}">${formatLabel(s)}</option>`).join('')}
+            </select>
+            <input id="verify-actor" type="text" value="David Fortson" placeholder="Reviewer name" class="w-full border border-blue-300 rounded px-2 py-1.5 text-sm">
+            <textarea id="verify-reason" rows="2" placeholder="Reason for transition..." class="w-full border border-blue-300 rounded px-2 py-1.5 text-sm"></textarea>
+            <button data-action="verify" data-rid="${escAttr(claim.claim_rid)}" class="bg-blue-600 text-white px-3 py-1.5 rounded text-sm font-medium hover:bg-blue-700 transition w-full">Advance State</button>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderAnchorActions(claim) {
+      if (claim.verification === 'ledger_anchored') return '';
+      if (claim.verification !== 'verified') return '';
+
+      return `
+        <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+          <h4 class="text-xs font-semibold text-yellow-800 mb-2">Blockchain Anchoring</h4>
+          <div class="space-y-2">
+            ${!claim.content_hash ? `
+              <button data-action="prepare" data-rid="${escAttr(claim.claim_rid)}" class="bg-yellow-600 text-white px-3 py-1.5 rounded text-sm font-medium hover:bg-yellow-700 transition w-full">1. Prepare Anchor (Compute Hash)</button>
+            ` : `
+              <div class="text-xs text-yellow-700 mb-1">Content hash: <code>${claim.content_hash.substring(0, 20)}...</code></div>
+              ${!claim.tx_hash ? `
+                <button data-action="broadcast" data-rid="${escAttr(claim.claim_rid)}" class="bg-yellow-600 text-white px-3 py-1.5 rounded text-sm font-medium hover:bg-yellow-700 transition w-full">2. Broadcast to Regen Ledger</button>
+              ` : `
+                <button data-action="reconcile" data-rid="${escAttr(claim.claim_rid)}" class="bg-yellow-600 text-white px-3 py-1.5 rounded text-sm font-medium hover:bg-yellow-700 transition w-full">3. Reconcile</button>
+              `}
+            `}
+          </div>
+        </div>
+      `;
+    }
+
+    function verdictColor(v) {
+      const map = {
+        approved: 'bg-green-100 text-green-700',
+        rejected: 'bg-red-100 text-red-700',
+        pending: 'bg-yellow-100 text-yellow-700',
+        needs_info: 'bg-blue-100 text-blue-700',
+      };
+      return map[v] || 'bg-gray-100 text-gray-600';
+    }
+
+    function renderAttestationPolicy(claim, attestations) {
+      const approved = attestations.filter(a => a.verdict === 'approved').length;
+      const needed = claim.verification === 'self_reported' ? 1
+                   : claim.verification === 'peer_reviewed' ? 2
+                   : 0;
+      if (needed === 0) return '';
+      const nextState = claim.verification === 'self_reported' ? 'peer_reviewed' : 'verified';
+      const pct = Math.min(100, Math.round(approved / needed * 100));
+      return `
+        <div class="bg-indigo-50 border border-indigo-200 rounded-lg p-3 mb-2 text-xs">
+          <div class="flex items-center justify-between mb-1">
+            <span class="font-medium text-indigo-700">${approved}/${needed} approved for ${formatLabel(nextState)}</span>
+            <span class="text-indigo-500">${pct}%</span>
+          </div>
+          <div class="w-full h-1.5 bg-indigo-100 rounded-full overflow-hidden">
+            <div class="h-full rounded-full bg-indigo-500 transition-all" style="width:${pct}%"></div>
+          </div>
+        </div>`;
+    }
+
+    function renderAttestationForm(claim) {
+      if (claim.verification === 'ledger_anchored' || claim.verification === 'withdrawn') return '';
+      return `
+        <div class="bg-indigo-50 border border-indigo-200 rounded-lg p-4 mt-2">
+          <h4 class="text-xs font-semibold text-indigo-800 mb-2">Add Attestation</h4>
+          <div class="space-y-2">
+            <div class="relative">
+              <input id="att-reviewer-search" type="text" placeholder="Search reviewer (Person or Organization)..."
+                class="w-full border border-indigo-300 rounded px-2 py-1.5 text-sm bg-white"
+                oninput="debounceReviewerSearch(this.value, '${escAttr(claim.claim_rid)}')">
+              <input id="att-reviewer-uri" type="hidden">
+              <div id="att-reviewer-dropdown" class="absolute z-10 w-full bg-white border border-gray-200 rounded-lg shadow-lg mt-1 hidden max-h-40 overflow-y-auto"></div>
+            </div>
+            <select id="att-verdict" class="w-full border border-indigo-300 rounded px-2 py-1.5 text-sm bg-white">
+              <option value="approved">Approved</option>
+              <option value="rejected">Rejected</option>
+              <option value="needs_info">Needs Info</option>
+              <option value="pending">Pending</option>
+            </select>
+            <textarea id="att-rationale" rows="2" placeholder="Rationale..." class="w-full border border-indigo-300 rounded px-2 py-1.5 text-sm"></textarea>
+            <button data-action="attest" data-rid="${escAttr(claim.claim_rid)}" class="bg-indigo-600 text-white px-3 py-1.5 rounded text-sm font-medium hover:bg-indigo-700 transition w-full">Submit Attestation</button>
+          </div>
+        </div>`;
+    }
+
+    let _reviewerSearchTimer = null;
+    function debounceReviewerSearch(query, claimRid) {
+      clearTimeout(_reviewerSearchTimer);
+      if (query.length < 2) {
+        document.getElementById('att-reviewer-dropdown').classList.add('hidden');
+        return;
+      }
+      _reviewerSearchTimer = setTimeout(() => searchReviewers(query), 300);
+    }
+
+    async function searchReviewers(query) {
+      const dropdown = document.getElementById('att-reviewer-dropdown');
+      try {
+        const [r1, r2] = await Promise.all([
+          api(`/entity-search?query=${encodeURIComponent(query)}&entity_type=Person&limit=10`).catch(() => ({ data: { results: [] } })),
+          api(`/entity-search?query=${encodeURIComponent(query)}&entity_type=Organization&limit=10`).catch(() => ({ data: { results: [] } })),
+        ]);
+        const results1 = r1.data?.results || r1.data?.entities || [];
+        const results2 = r2.data?.results || r2.data?.entities || [];
+        const seen = new Set();
+        const merged = [...results1, ...results2].filter(e => {
+          const uri = e.uri || e.fuseki_uri;
+          if (seen.has(uri)) return false;
+          seen.add(uri);
+          return true;
+        });
+        if (merged.length === 0) {
+          dropdown.classList.add('hidden');
+          return;
+        }
+        dropdown.innerHTML = merged.map(e => {
+          const uri = e.uri || e.fuseki_uri;
+          const name = e.name || e.entity_text || uri;
+          const type = e.type || e.entity_type || '';
+          return `<div class="px-3 py-2 hover:bg-gray-100 cursor-pointer text-sm" data-uri="${escAttr(uri)}" data-name="${escAttr(name)}">
+            <span class="font-medium">${escHtml(name)}</span>
+            <span class="text-xs text-gray-400 ml-1">${escHtml(type)}</span>
+          </div>`;
+        }).join('');
+        dropdown.classList.remove('hidden');
+        dropdown.querySelectorAll('[data-uri]').forEach(el => {
+          el.addEventListener('click', () => {
+            document.getElementById('att-reviewer-search').value = el.dataset.name;
+            document.getElementById('att-reviewer-uri').value = el.dataset.uri;
+            dropdown.classList.add('hidden');
+          });
+        });
+      } catch (e) {
+        dropdown.classList.add('hidden');
+      }
+    }
+
+    async function submitAttestation(rid) {
+      const reviewerUri = document.getElementById('att-reviewer-uri').value;
+      const verdict = document.getElementById('att-verdict').value;
+      const rationale = document.getElementById('att-rationale').value;
+      if (!reviewerUri) {
+        toast('Please select a reviewer from the search results', 'error');
+        return;
+      }
+      try {
+        await api(`/claims/${encodeURIComponent(rid)}/attestations`, {
+          method: 'POST',
+          body: JSON.stringify({ reviewer_uri: reviewerUri, verdict, rationale }),
+        });
+        toast(`Attestation submitted: ${verdict}`, 'success');
+        await loadAllClaims();
+        renderDashboard();
+        openDetail(rid);
+      } catch (e) {
+        toast('Attestation failed: ' + e.message, 'error');
+      }
+    }
+
+    function closeDetail() {
+      document.getElementById('detail-overlay').classList.add('hidden');
+      document.getElementById('detail-panel').classList.remove('open');
+    }
+
+    // ==================== VERIFICATION ====================
+    async function verifyClaim(rid) {
+      const level = document.getElementById('verify-level').value;
+      const actor = document.getElementById('verify-actor').value;
+      const reason = document.getElementById('verify-reason').value;
+
+      try {
+        await api(`/claims/${encodeURIComponent(rid)}/verify`, {
+          method: 'PATCH',
+          body: JSON.stringify({ new_level: level, actor, reason }),
+        });
+        toast(`Claim advanced to ${formatLabel(level)}`, 'success');
+        await loadAllClaims();
+        renderDashboard();
+        loadClaims();
+        openDetail(rid);
+      } catch (e) {
+        toast('Verification failed: ' + e.message, 'error');
+      }
+    }
+
+    // ==================== ANCHORING ====================
+    async function prepareAnchor(rid) {
+      try {
+        const { data } = await api(`/claims/${encodeURIComponent(rid)}/prepare-anchor`, { method: 'POST' });
+        toast(`Hash computed: ${data.content_hash?.substring(0, 16)}...`, 'success');
+        await loadAllClaims();
+        openDetail(rid);
+      } catch (e) {
+        toast('Prepare failed: ' + e.message, 'error');
+      }
+    }
+
+    async function broadcastAnchor(rid) {
+      try {
+        const res = await fetch(`${API_BASE}/claims/${encodeURIComponent(rid)}/anchor`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+        });
+        const data = await res.json();
+        if (res.status === 200) {
+          toast(`Anchored on-chain! Tx: ${data.tx_hash?.substring(0, 16)}...`, 'success');
+        } else if (res.status === 202) {
+          toast('Broadcast pending — use Reconcile to finalize', 'warning');
+        } else {
+          toast('Anchor failed: ' + (data.detail || 'Unknown error'), 'error');
+        }
+        await loadAllClaims();
+        renderDashboard();
+        openDetail(rid);
+      } catch (e) {
+        toast('Broadcast failed: ' + e.message, 'error');
+      }
+    }
+
+    async function reconcileAnchor(rid) {
+      try {
+        const { data } = await api(`/claims/${encodeURIComponent(rid)}/reconcile`, { method: 'POST' });
+        if (data.status === 'anchored') {
+          toast('Claim anchored on-chain!', 'success');
+        } else if (data.status === 'pending') {
+          toast('Still pending — try again in a moment', 'warning');
+        } else {
+          toast(`Reconcile: ${data.status} — ${data.message}`, 'warning');
+        }
+        await loadAllClaims();
+        renderDashboard();
+        openDetail(rid);
+      } catch (e) {
+        toast('Reconcile failed: ' + e.message, 'error');
+      }
+    }
+
+    // ==================== AI EXTRACTION ====================
+    const EXAMPLE_TEXT = `Blue Forest Conservation has been working in the Sierra Nevada since 2019 to restore critical watershed forests. In 2023, their Forest Resilience Bond program restored 2,400 acres of degraded forest land in the North Yuba River watershed, removing hazardous fuels and reintroducing beneficial fire. This work is estimated to have sequestered approximately 18,000 tons of CO2 equivalent annually and reduced wildfire risk for downstream communities protecting over 12,000 residents.
+
+The Community Environmental Council (CEC) in Santa Barbara County launched a regional food systems initiative that diverted 3,200 tons of organic waste from landfills in 2023 through their commercial composting partnerships. This program also created 28 green jobs in the local community and reduced methane emissions equivalent to removing 1,400 cars from the road.
+
+Zero Foodprint awarded $450,000 in grants to 15 farms across California in 2023 for implementing regenerative agriculture practices including cover cropping, composting, and reduced tillage on a combined 6,800 acres. Early soil sampling indicates a 12% increase in soil organic carbon across participating farms compared to conventional baselines.`;
+
+    function loadExample() {
+      document.getElementById('extract-text').value = EXAMPLE_TEXT;
+    }
+
+    async function runExtraction() {
+      const text = document.getElementById('extract-text').value.trim();
+      if (text.length < 50) {
+        toast('Please enter at least 50 characters of text.', 'error');
+        return;
+      }
+
+      const btn = document.getElementById('btn-extract');
+      const results = document.getElementById('extract-results');
+      btn.disabled = true;
+      btn.innerHTML = '<div class="spinner"></div> Extracting...';
+      results.innerHTML = '<div class="text-center py-8"><div class="spinner mx-auto mb-2"></div>AI is analyzing the text...</div>';
+
+      try {
+        const { data } = await api('/claims/extract', {
+          method: 'POST',
+          body: JSON.stringify({
+            document_text: text,
+            source_document: 'claims-demo-portal:extraction-preview',
+            auto_create: false,
+          }),
+        });
+
+        extractedCandidates = data.candidates || [];
+        if (extractedCandidates.length === 0) {
+          results.innerHTML = '<p class="text-sm text-gray-400 text-center py-8">No claims found in the text.</p>';
+          document.getElementById('btn-create-all').classList.add('hidden');
+        } else {
+          document.getElementById('btn-create-all').classList.remove('hidden');
+          renderExtractionResults();
+        }
+      } catch (e) {
+        results.innerHTML = `<p class="text-red-500 text-sm">Extraction failed: ${escHtml(e.message)}</p>`;
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg> Extract Claims';
+      }
+    }
+
+    function renderExtractionResults() {
+      const results = document.getElementById('extract-results');
+      results.innerHTML = extractedCandidates.map((c, i) => `
+        <div class="fade-in bg-gray-50 rounded-lg p-4 border border-gray-200">
+          <div class="flex items-start justify-between mb-2">
+            <span class="inline-block px-2 py-0.5 rounded-full text-xs font-medium ${typeColor(c.claim_type)}">${formatLabel(c.claim_type)}</span>
+            <span class="text-xs font-medium ${c.confidence >= 0.9 ? 'text-green-600' : c.confidence >= 0.7 ? 'text-amber-600' : 'text-red-600'}">${(c.confidence * 100).toFixed(0)}% confidence</span>
+          </div>
+          <p class="text-sm text-gray-900 mb-2">${escHtml(c.statement)}</p>
+          <div class="text-xs text-gray-500 mb-3">Claimant: <span class="font-medium text-gray-700">${escHtml(c.claimant_name || 'Unknown')}</span></div>
+          ${c.metadata ? `<div class="text-xs text-gray-400 mb-3">${escHtml(JSON.stringify(c.metadata).substring(0, 120))}...</div>` : ''}
+          <button onclick="createFromCandidate(${i})" class="text-xs bg-regen-600 text-white px-3 py-1 rounded font-medium hover:bg-regen-700 transition" id="btn-candidate-${i}">Create Claim</button>
+        </div>
+      `).join('');
+    }
+
+    async function createFromCandidate(index) {
+      const c = extractedCandidates[index];
+      const btn = document.getElementById(`btn-candidate-${index}`);
+      btn.disabled = true;
+      btn.textContent = 'Creating...';
+
+      try {
+        // Try to resolve claimant by name
+        let claimantUri = null;
+        if (c.claimant_name) {
+          try {
+            let { data } = await api(`/entity-search?query=${encodeURIComponent(c.claimant_name)}&entity_type=Organization&limit=1`);
+            let results = data.results || data;
+            if (results.length === 0) {
+              ({ data } = await api(`/entity-search?query=${encodeURIComponent(c.claimant_name)}&entity_type=ORGANIZATION&limit=1`));
+              results = data.results || data;
+            }
+            if (results.length > 0) claimantUri = results[0].fuseki_uri || results[0].uri;
+          } catch (e) { /* ignore */ }
+        }
+
+        if (!claimantUri) {
+          toast(`Could not resolve "${c.claimant_name}" — select an org manually.`, 'warning');
+          btn.disabled = false;
+          btn.textContent = 'Create Claim';
+          return;
+        }
+
+        await api('/claims/', {
+          method: 'POST',
+          body: JSON.stringify({
+            claimant_uri: claimantUri,
+            statement: c.statement,
+            claim_type: c.claim_type,
+            ai_confidence: c.confidence,
+            source_document: 'claims-demo-portal:extraction-created',
+            metadata: c.metadata || {},
+          }),
+        });
+
+        btn.textContent = 'Created!';
+        btn.classList.remove('bg-regen-600', 'hover:bg-regen-700');
+        btn.classList.add('bg-gray-300', 'text-gray-500');
+        toast(`Claim created from "${c.claimant_name}"`, 'success');
+        await loadAllClaims();
+        renderDashboard();
+      } catch (e) {
+        toast('Create failed: ' + e.message, 'error');
+        btn.disabled = false;
+        btn.textContent = 'Create Claim';
+      }
+    }
+
+    async function createAllExtracted() {
+      const text = document.getElementById('extract-text').value.trim();
+      const btn = document.getElementById('btn-create-all');
+      btn.disabled = true;
+      btn.textContent = 'Creating...';
+
+      try {
+        const { data } = await api('/claims/extract', {
+          method: 'POST',
+          body: JSON.stringify({
+            document_text: text,
+            source_document: 'claims-demo-portal:extraction-created',
+            auto_create: true,
+          }),
+        });
+
+        const created = data.auto_created || [];
+        toast(`Created ${created.length} claims automatically.`, 'success');
+        await loadAllClaims();
+        renderDashboard();
+        loadClaims();
+      } catch (e) {
+        toast('Create all failed: ' + e.message, 'error');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Create All';
+      }
+    }
+
+    // ==================== CREATE CLAIM ====================
+    async function submitClaim(event) {
+      event.preventDefault();
+      const claimantUri = document.getElementById('create-claimant').value;
+      const statement = document.getElementById('create-statement').value.trim();
+      const claimType = document.getElementById('create-type').value;
+      const aboutUri = document.getElementById('create-about-uri').value || undefined;
+      let metadata = {};
+      try {
+        const raw = document.getElementById('create-metadata').value.trim();
+        if (raw) metadata = JSON.parse(raw);
+      } catch (e) {
+        toast('Invalid JSON in metadata field.', 'error');
+        return;
+      }
+
+      try {
+        const { data } = await api('/claims/', {
+          method: 'POST',
+          body: JSON.stringify({
+            claimant_uri: claimantUri,
+            statement,
+            claim_type: claimType,
+            about_uri: aboutUri,
+            metadata,
+            source_document: 'claims-demo-portal:manual-entry',
+          }),
+        });
+        toast(`Claim created: ${data.claim_rid?.substring(0, 24)}...`, 'success');
+        document.getElementById('create-statement').value = '';
+        await loadAllClaims();
+        renderDashboard();
+      } catch (e) {
+        toast('Create failed: ' + e.message, 'error');
+      }
+    }
+
+    let aboutSearchTimeout;
+    async function searchAboutEntity(query) {
+      clearTimeout(aboutSearchTimeout);
+      const suggestions = document.getElementById('about-suggestions');
+      if (query.length < 2) {
+        suggestions.classList.add('hidden');
+        return;
+      }
+      aboutSearchTimeout = setTimeout(async () => {
+        try {
+          const { data } = await api(`/entity-search?query=${encodeURIComponent(query)}&limit=8`);
+          const results = data.results || data;
+          if (results.length === 0) {
+            suggestions.classList.add('hidden');
+            return;
+          }
+          suggestions.classList.remove('hidden');
+          suggestions.innerHTML = results.map(r => `
+            <div class="px-3 py-2 hover:bg-gray-50 cursor-pointer text-sm about-suggestion"
+                 data-uri="${escAttr(r.fuseki_uri || r.uri)}"
+                 data-name="${escAttr(r.name || r.entity_text)}">
+              <span class="font-medium">${escHtml(r.name || r.entity_text)}</span>
+              <span class="text-gray-400 text-xs ml-2">${r.entity_type || ''}</span>
+            </div>
+          `).join('');
+          suggestions.onclick = (e) => {
+            const el = e.target.closest('.about-suggestion');
+            if (el) selectAboutEntity(el.dataset.uri, el.dataset.name);
+          };
+        } catch (e) { /* ignore */ }
+      }, 300);
+    }
+
+    function selectAboutEntity(uri, name) {
+      document.getElementById('create-about').value = name;
+      document.getElementById('create-about-uri').value = uri;
+      document.getElementById('about-suggestions').classList.add('hidden');
+    }
+
+    // ==================== TABS ====================
+    function showTab(name) {
+      document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+      document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+      document.getElementById(`tab-${name}`).classList.remove('hidden');
+      document.querySelector(`[data-tab="${name}"]`).classList.add('active');
+
+      if (name === 'browser') loadClaims();
+    }
+
+    // ==================== UTILITIES ====================
+    function countBy(arr, key) {
+      const m = {};
+      arr.forEach(item => { const v = item[key] || 'unknown'; m[v] = (m[v] || 0) + 1; });
+      return m;
+    }
+
+    function statusColor(s) {
+      return {
+        self_reported: 'bg-gray-100 text-gray-700',
+        peer_reviewed: 'bg-blue-100 text-blue-700',
+        verified: 'bg-green-100 text-green-700',
+        ledger_anchored: 'bg-yellow-100 text-yellow-700',
+        withdrawn: 'bg-red-100 text-red-700',
+      }[s] || 'bg-gray-100 text-gray-600';
+    }
+
+    function statusDotColor(s) {
+      return {
+        self_reported: 'bg-gray-400',
+        peer_reviewed: 'bg-blue-500',
+        verified: 'bg-green-500',
+        ledger_anchored: 'bg-yellow-500',
+        withdrawn: 'bg-red-500',
+      }[s] || 'bg-gray-400';
+    }
+
+    function typeColor(t) {
+      return {
+        ecological: 'bg-emerald-100 text-emerald-700',
+        social: 'bg-purple-100 text-purple-700',
+        financial: 'bg-sky-100 text-sky-700',
+        governance: 'bg-orange-100 text-orange-700',
+      }[t] || 'bg-gray-100 text-gray-600';
+    }
+
+    function formatLabel(s) {
+      if (!s) return '';
+      return s.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+    }
+
+    function formatDate(iso) {
+      if (!iso) return '—';
+      return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    }
+
+    function formatDateTime(iso) {
+      if (!iso) return '—';
+      return new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+    }
+
+    function escHtml(s) {
+      if (!s) return '';
+      const div = document.createElement('div');
+      div.textContent = s;
+      return div.innerHTML;
+    }
+
+    function escAttr(s) {
+      if (!s) return '';
+      return s.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+
+    function toast(msg, type = 'info') {
+      const colors = {
+        success: 'bg-green-600',
+        error: 'bg-red-600',
+        warning: 'bg-amber-600',
+        info: 'bg-gray-700',
+      };
+      const container = document.getElementById('toasts');
+      const el = document.createElement('div');
+      el.className = `toast ${colors[type]} text-white px-4 py-2.5 rounded-lg shadow-lg text-sm max-w-sm`;
+      el.textContent = msg;
+      container.appendChild(el);
+      setTimeout(() => el.remove(), 3000);
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,19 @@
+{
+  "version": "1.0.0",
+  "last_updated": "2025-12-08",
+  "confidence_thresholds": {
+    "entity_min_confidence": 0.70,
+    "relationship_min_confidence": 0.80,
+    "strict_mode": false,
+    "allow_null_confidence": true
+  },
+  "confidence_policy": {
+    "comment": "Entities below min_confidence are blocked. Relationships require higher confidence.",
+    "null_handling": "allow_null_confidence=true means entities without confidence scores are allowed (backward compatibility)",
+    "strict_mode": "strict_mode=true requires all entities to have confidence scores",
+    "thresholds_rationale": {
+      "entity_0.70": "Filters out ~20% lowest confidence extractions while preserving most valid entities",
+      "relationship_0.80": "Relationships need higher confidence as they connect entities and can propagate errors"
+    }
+  }
+}

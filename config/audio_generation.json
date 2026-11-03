@@ -1,0 +1,41 @@
+{
+  "podcastfy": {
+    "llm_model": "gemini-1.5-pro-latest",
+    "api_key_label": "GEMINI_API_KEY",
+    "tts_provider": "openai",
+    "tts_model": "tts-1",
+    "podcast_length": "medium",
+    "conversation_style": "informative",
+    "creativity": 0.7,
+    "language": "English",
+    "output_format": "mp3",
+    "hosts": {
+      "count": 2,
+      "style": "friendly_experts"
+    }
+  },
+  "content": {
+    "max_topics": 10,
+    "max_stories_per_topic": 3,
+    "include_stats": true,
+    "include_citations": false,
+    "prioritize_themes": [
+      "governance",
+      "ecocredits",
+      "regeneration",
+      "community"
+    ]
+  },
+  "audio": {
+    "target_duration_minutes": 20,
+    "intro_style": "welcoming",
+    "outro_style": "summary",
+    "music": false,
+    "sound_effects": false
+  },
+  "quality": {
+    "audio_bitrate": "128k",
+    "sample_rate": 44100,
+    "normalize_audio": true
+  }
+}

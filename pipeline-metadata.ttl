@@ -1,0 +1,343 @@
+# KOI Pipeline Metadata
+# Defines the actual infrastructure components and their connections
+# Date: September 26, 2025
+
+@prefix koi: <http://koi.regen.network/ontology#> .
+@prefix : <http://koi.regen.network/infrastructure/> .
+@prefix sensor: <http://koi.regen.network/sensor/> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix dc: <http://purl.org/dc/elements/1.1/> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# ============================================================================
+# Sensors (Data Collection Layer)
+# ============================================================================
+
+sensor:github-sensor a koi:Sensor ;
+    rdfs:label "GitHub Sensor" ;
+    koi:rid "koi.sensor:github-sensor" ;
+    koi:sensorType "github" ;
+    koi:endpoint "http://localhost:8005" ;
+    koi:status "active" ;
+    koi:monitors <https://github.com/regen-network> ;
+    koi:sendsTo :coordinator ;
+    dc:description "Monitors Regen Network GitHub repositories" .
+
+sensor:twitter-sensor a koi:Sensor ;
+    rdfs:label "Twitter Sensor" ;
+    koi:rid "koi.sensor:twitter-sensor" ;
+    koi:sensorType "twitter" ;
+    koi:endpoint "http://localhost:8005" ;
+    koi:status "active" ;
+    koi:monitors "@regen_network" ;
+    koi:sendsTo :coordinator ;
+    dc:description "Monitors Twitter/X for Regen Network mentions" .
+
+sensor:notion-sensor a koi:Sensor ;
+    rdfs:label "Notion Sensor" ;
+    koi:rid "koi.sensor:notion-sensor" ;
+    koi:sensorType "notion" ;
+    koi:endpoint "http://localhost:8005" ;
+    koi:status "active" ;
+    koi:monitors "Regen Network Workspace" ;
+    koi:sendsTo :coordinator ;
+    dc:description "Syncs Notion pages and databases" .
+
+sensor:discourse-sensor a koi:Sensor ;
+    rdfs:label "Discourse Sensor" ;
+    koi:rid "koi.sensor:discourse-sensor" ;
+    koi:sensorType "discourse" ;
+    koi:endpoint "http://localhost:8005" ;
+    koi:status "active" ;
+    koi:monitors <https://forum.regen.network> ;
+    koi:monitors <https://regencommons.discourse.group> ;
+    koi:sendsTo :coordinator ;
+    dc:description "Monitors Discourse forums" .
+
+sensor:gitlab-sensor a koi:Sensor ;
+    rdfs:label "GitLab Sensor" ;
+    koi:rid "koi.sensor:gitlab-sensor" ;
+    koi:sensorType "gitlab" ;
+    koi:endpoint "http://localhost:8005" ;
+    koi:status "active" ;
+    koi:monitors "regen-public" ;
+    koi:sendsTo :coordinator ;
+    dc:description "Monitors GitLab repositories" .
+
+sensor:medium-sensor a koi:Sensor ;
+    rdfs:label "Medium Sensor" ;
+    koi:rid "koi.sensor:medium-sensor" ;
+    koi:sensorType "medium" ;
+    koi:endpoint "http://localhost:8005" ;
+    koi:status "active" ;
+    koi:monitors "@regennetwork" ;
+    koi:sendsTo :coordinator ;
+    dc:description "Collects Medium articles" .
+
+sensor:website-sensor a koi:Sensor ;
+    rdfs:label "Website Sensor" ;
+    koi:rid "koi.sensor:website-sensor" ;
+    koi:sensorType "website" ;
+    koi:endpoint "http://localhost:8005" ;
+    koi:status "active" ;
+    koi:monitors <https://www.regen.network> ;
+    koi:monitors <https://docs.regen.network> ;
+    koi:monitors <https://registry.regen.network> ;
+    koi:sendsTo :coordinator ;
+    dc:description "Scrapes Regen Network websites" .
+
+sensor:telegram-sensor a koi:Sensor ;
+    rdfs:label "Telegram Sensor" ;
+    koi:rid "koi.sensor:telegram-sensor" ;
+    koi:sensorType "telegram" ;
+    koi:endpoint "http://localhost:8005" ;
+    koi:status "active" ;
+    koi:monitors "Regen Network Channel" ;
+    koi:sendsTo :coordinator ;
+    dc:description "Monitors Telegram channels" .
+
+sensor:discord-sensor a koi:Sensor ;
+    rdfs:label "Discord Sensor" ;
+    koi:rid "koi.sensor:discord-sensor" ;
+    koi:sensorType "discord" ;
+    koi:endpoint "http://localhost:8005" ;
+    koi:status "offline" ;
+    koi:monitors "Regen Network Discord" ;
+    koi:sendsTo :coordinator ;
+    dc:description "Monitors Discord server (Not configured yet)" .
+
+sensor:podcast-sensor a koi:Sensor ;
+    rdfs:label "Podcast Sensor" ;
+    koi:rid "koi.sensor:podcast-sensor" ;
+    koi:sensorType "podcast" ;
+    koi:endpoint "http://localhost:8005" ;
+    koi:status "active" ;
+    koi:monitors "Regen Network Podcast" ;
+    koi:sendsTo :coordinator ;
+    dc:description "Indexes podcast episodes" .
+
+sensor:ledger-sensor a koi:Sensor ;
+    rdfs:label "Ledger Sensor" ;
+    koi:rid "koi.sensor:ledger-sensor" ;
+    koi:sensorType "ledger" ;
+    koi:endpoint "http://localhost:8005" ;
+    koi:status "offline" ;
+    koi:monitors <https://mainnet.regen.network> ;
+    koi:sendsTo :coordinator ;
+    dc:description "Monitors Regen Ledger blockchain (Not configured yet)" .
+
+sensor:github-activity-sensor a koi:Sensor ;
+    rdfs:label "GitHub Activity Sensor" ;
+    koi:rid "koi.sensor:github-activity-sensor" ;
+    koi:sensorType "github-activity" ;
+    koi:endpoint "http://localhost:8005" ;
+    koi:status "active" ;
+    koi:monitors <https://github.com/regen-network> ;
+    koi:sendsTo :coordinator ;
+    dc:description "Collects comprehensive GitHub activity (commits, issues, PRs) for daily/weekly curation" .
+
+sensor:email-sensor a koi:Sensor ;
+    rdfs:label "Email Sensor" ;
+    koi:rid "koi.sensor:email-sensor" ;
+    koi:sensorType "email" ;
+    koi:endpoint "http://localhost:8351" ;
+    koi:status "active" ;
+    koi:monitors "Local Maildir (Gmail sync)" ;
+    koi:sendsTo :personal-ingest-api ;
+    dc:description "Indexes personal email content into koi_memories/email_metadata" .
+
+sensor:claude-sessions-sensor a koi:Sensor ;
+    rdfs:label "Claude Sessions Sensor" ;
+    koi:rid "koi.sensor:claude-sessions-sensor" ;
+    koi:sensorType "claude-sessions" ;
+    koi:endpoint "http://localhost:8351" ;
+    koi:status "active" ;
+    koi:monitors "~/.claude/projects" ;
+    koi:sendsTo :personal-ingest-api ;
+    dc:description "Indexes Claude Code session transcripts and metadata" .
+
+# ============================================================================
+# Processing Layer
+# ============================================================================
+
+:coordinator a koi:Coordinator ;
+    rdfs:label "KOI Coordinator" ;
+    koi:rid "koi.infrastructure:coordinator" ;
+    koi:endpoint "http://localhost:8005" ;
+    koi:port 8005 ;
+    koi:status "active" ;
+    koi:forwardsTo :forwarder ;
+    dc:description "Central hub for sensor events and routing" .
+
+:forwarder a koi:Processor ;
+    rdfs:label "Event Forwarder" ;
+    koi:rid "koi.infrastructure:forwarder" ;
+    koi:endpoint "http://localhost:8005" ;
+    koi:port 8005 ;
+    koi:status "active" ;
+    koi:receivesFrom :coordinator ;
+    koi:forwardsTo :event-bridge ;
+    dc:description "Polls coordinator and forwards events to Event Bridge" .
+
+:event-bridge a koi:Processor ;
+    rdfs:label "KOI Event Bridge v2" ;
+    koi:rid "koi.infrastructure:event-bridge" ;
+    koi:endpoint "http://localhost:8100" ;
+    koi:port 8100 ;
+    koi:status "active" ;
+    koi:receivesFrom :forwarder ;
+    koi:forwardsTo :bge-embeddings ;
+    koi:forwardsTo :apache-jena ;
+    dc:description "Processes events with deduplication and versioning" .
+
+:bge-embeddings a koi:Processor ;
+    rdfs:label "BGE Embedding Server" ;
+    koi:rid "koi.infrastructure:bge-embeddings" ;
+    koi:endpoint "http://localhost:8090" ;
+    koi:port 8090 ;
+    koi:status "active" ;
+    koi:receivesFrom :event-bridge ;
+    koi:forwardsTo :postgresql ;
+    dc:description "Generates BAAI/bge-large-en-v1.5 embeddings" .
+
+# ============================================================================
+# Storage Layer
+# ============================================================================
+
+:postgresql a koi:Storage ;
+    rdfs:label "PostgreSQL Database" ;
+    koi:rid "koi.infrastructure:postgresql" ;
+    koi:endpoint "postgresql://localhost:5433/eliza" ;
+    koi:port 5433 ;
+    koi:status "active" ;
+    koi:receivesFrom :bge-embeddings ;
+    koi:queriedBy :mcp-server ;
+    koi:queriedBy :content-api ;
+    dc:description "Primary database with pgvector for embeddings" .
+
+:apache-jena a koi:Storage ;
+    rdfs:label "Apache Jena Fuseki" ;
+    koi:rid "koi.infrastructure:apache-jena" ;
+    koi:endpoint "http://localhost:3030" ;
+    koi:port 3030 ;
+    koi:status "active" ;
+    koi:receivesFrom :event-bridge ;
+    koi:queriedBy :mcp-server ;
+    koi:queriedBy :pipeline-metadata-api ;
+    dc:description "RDF triplestore for knowledge graph" .
+
+# ============================================================================
+# Service Layer
+# ============================================================================
+
+:daily-curator a koi:Service ;
+    rdfs:label "Daily Curator" ;
+    koi:rid "koi.infrastructure:daily-curator" ;
+    koi:endpoint "http://localhost:8400" ;
+    koi:port 8400 ;
+    koi:status "idle" ;
+    koi:receivesFrom :postgresql ;
+    koi:writesTo :postgresql ;
+    dc:description "Generates daily content threads (runs at 12:00 ET)" .
+
+:weekly-curator a koi:Service ;
+    rdfs:label "Weekly Curator" ;
+    koi:rid "koi.infrastructure:weekly-curator" ;
+    koi:endpoint "http://localhost:8400" ;
+    koi:port 8400 ;
+    koi:status "idle" ;
+    koi:receivesFrom :postgresql ;
+    koi:writesTo :postgresql ;
+    dc:description "Generates weekly digest posts (runs Fridays at 10:00 ET)" .
+
+:mcp-server a koi:Service ;
+    rdfs:label "MCP Knowledge Server" ;
+    koi:rid "koi.infrastructure:mcp-server" ;
+    koi:endpoint "http://localhost:8200" ;
+    koi:port 8200 ;
+    koi:status "active" ;
+    koi:receivesFrom :postgresql ;
+    koi:receivesFrom :apache-jena ;
+    koi:sendsTo :eliza-agents ;
+    dc:description "Model Context Protocol server for agent knowledge" .
+
+:content-api a koi:Service ;
+    rdfs:label "KOI Content API" ;
+    koi:rid "koi.infrastructure:content-api" ;
+    koi:endpoint "http://localhost:8007" ;
+    koi:port 8007 ;
+    koi:status "active" ;
+    koi:receivesFrom :event-bridge ;
+    koi:queriesFrom :postgresql ;
+    dc:description "Provides scraped content pages from sensors" .
+
+:pipeline-metadata-api a koi:Service ;
+    rdfs:label "Pipeline Metadata API" ;
+    koi:rid "koi.infrastructure:pipeline-metadata-api" ;
+    koi:endpoint "http://localhost:8002/api/koi/graph" ;
+    koi:port 8002 ;
+    koi:status "active" ;
+    koi:queriesFrom :apache-jena ;
+    dc:description "Provides pipeline structure and metadata" .
+
+:personal-ingest-api a koi:Service ;
+    rdfs:label "Personal Ingest API" ;
+    koi:rid "koi.infrastructure:personal-ingest-api" ;
+    koi:endpoint "http://localhost:8351" ;
+    koi:port 8351 ;
+    koi:status "active" ;
+    koi:receivesFrom sensor:email-sensor ;
+    koi:receivesFrom sensor:claude-sessions-sensor ;
+    koi:writesTo :postgresql ;
+    koi:queriedBy :mcp-server ;
+    dc:description "Personal data API for session search and email metadata lookup" .
+
+# ============================================================================
+# Agent Layer
+# ============================================================================
+
+:eliza-agents a koi:Service ;
+    rdfs:label "Eliza AI Agents" ;
+    koi:rid "koi.infrastructure:eliza-agents" ;
+    koi:endpoint "http://localhost:3000" ;
+    koi:port 3000 ;
+    koi:status "active" ;
+    koi:receivesFrom :mcp-server ;
+    koi:queriesFrom :postgresql ;
+    koi:writesTo :postgresql ;
+    dc:description "Eliza AI agent framework with 5 specialized agents" .
+
+# ============================================================================
+# Pipeline Flow Connections (Summary)
+# ============================================================================
+
+# The complete data flow through the pipeline:
+# 1. Sensors → Coordinator (collection)
+# 2. Coordinator → Forwarder (polling)
+# 3. Forwarder → Event Bridge (forwarding)
+# 4. Event Bridge → BGE Embeddings (processing)
+# 5. Event Bridge → Apache Jena (RDF storage)
+# 6. Event Bridge → Content API (content serving)
+# 7. BGE Embeddings → PostgreSQL (vector storage)
+# 8. PostgreSQL → Daily Curator (content generation)
+# 9. PostgreSQL → Weekly Curator (digest generation)
+# 10. Daily/Weekly Curator → PostgreSQL (storing drafts)
+# 11. PostgreSQL → MCP Server (knowledge access)
+# 12. Apache Jena → MCP Server (graph queries)
+# 13. Apache Jena → Pipeline Metadata API (structure queries)
+# 14. MCP Server → Eliza Agents (RAG)
+# 15. PostgreSQL → Eliza Agents (direct memory access)
+# 16. Email Sensor → Personal Ingest API (personal email indexing)
+# 17. Claude Sessions Sensor → Personal Ingest API (session indexing)
+# 18. Personal Ingest API → PostgreSQL (personal memory tables)
+
+# ============================================================================
+# Additional Metadata
+# ============================================================================
+
+:pipeline a koi:Component ;
+    rdfs:label "KOI Pipeline" ;
+    koi:version "2.0.0" ;
+    dc:creator "Regen Network" ;
+    dc:date "2025-09-26" ;
+    dc:description "Complete KOI sensor-to-agent pipeline for regenerative knowledge" .

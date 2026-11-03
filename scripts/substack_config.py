@@ -6,7 +6,7 @@ repo so forks configure their own. Read from:
 (copy config/substack_publications.example.yaml to create it).
 
 Read by substack_sensor.py (free + cookie-auth paid posts via the API) and by the
-Gmail paid-post bridge, ingest_substack_from_gmail.py (not in the public export).
+Gmail paid-post bridge, ingest_substack_from_gmail.py (run by run_substack_gmail_bridge.sh).
 """
 
 import os

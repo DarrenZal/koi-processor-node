@@ -1,0 +1,228 @@
+# Milestone B Content Operations Dashboard Configuration
+# This file configures the monitoring dashboard for Daily Bot and Weekly Digest
+
+dashboard:
+  # Port for the dashboard web server
+  port: 8400
+  
+  # Auto-refresh interval in seconds
+  refresh_interval: 30
+  
+  # Enable authentication (set to true in production)
+  auth_enabled: false
+  
+  # Session timeout in minutes
+  session_timeout: 60
+  
+  # WebSocket settings
+  websocket:
+    enabled: true
+    ping_interval: 25
+    ping_timeout: 60
+
+# Quality thresholds for content validation
+thresholds:
+  daily_bot:
+    # Minimum number of sources required for daily posts
+    min_sources: 3
+    
+    # Maximum thread length (number of posts)
+    max_thread_length: 5
+    
+    # Minimum thread length
+    min_thread_length: 3
+    
+    # Style score below this triggers warning
+    style_score_warning: 0.7
+    
+    # Style score below this triggers rejection
+    style_score_critical: 0.5
+    
+    # Maximum speculation phrases allowed
+    max_speculation_phrases: 0
+    
+  weekly_digest:
+    # Word count range for weekly briefs
+    min_word_count: 800
+    max_word_count: 1200
+    
+    # Minimum number of unique sources
+    min_sources: 10
+    
+    # Minimum content items to include
+    min_content_items: 15
+    
+    # Style score thresholds
+    style_score_warning: 0.75
+    style_score_critical: 0.6
+    
+  podcast:
+    # Target duration in minutes
+    target_duration_min: 18
+    target_duration_max: 22
+    
+    # Maximum file size in MB
+    max_file_size_mb: 50
+
+# Alert configuration
+alerts:
+  # Enable email notifications
+  email_enabled: false
+  email_recipients: []
+  
+  # Enable Slack notifications
+  slack_enabled: false
+  slack_webhook_url: null
+  slack_channel: "#content-ops"
+  
+  # Enable Discord notifications
+  discord_enabled: false
+  discord_webhook_url: null
+  
+  # Alert severity levels
+  severity_levels:
+    critical:
+      - "database_connection_failed"
+      - "koi_pipeline_down"
+      - "bge_server_unreachable"
+    warning:
+      - "style_score_low"
+      - "content_validation_failed"
+      - "source_unavailable"
+    info:
+      - "draft_generated"
+      - "content_approved"
+      - "podcast_ready"
+
+# Database connection settings (can be overridden by environment variables)
+database:
+  host: ${DB_HOST:-localhost}
+  port: ${DB_PORT:-5433}
+  name: ${DB_NAME:-eliza}
+  user: ${DB_USER:-postgres}
+  password: ${DB_PASSWORD:-postgres}
+  
+  # Connection pool settings
+  pool_size: 5
+  max_overflow: 10
+  pool_timeout: 30
+
+# Integration endpoints for other services
+integrations:
+  # KOI Event Bridge
+  koi_event_bridge:
+    url: "http://localhost:8100"
+    timeout: 10
+    
+  # BGE Embedding Server
+  bge_server:
+    url: "http://localhost:8090"
+    timeout: 30
+    
+  # KOI Coordinator
+  koi_coordinator:
+    url: "http://localhost:8005"
+    timeout: 10
+    
+  # Quality Control API
+  quality_control:
+    enabled: true
+    
+  # Permissions API
+  permissions_api:
+    url: "http://localhost:8300"
+    enabled: false
+
+# Schedule configuration
+schedule:
+  # Daily bot schedule (in UTC)
+  daily_bot:
+    enabled: true
+    # 16:00 UTC = 12:00 ET
+    hour: 16
+    minute: 0
+    # Days of week (0=Monday, 6=Sunday)
+    days: [0, 1, 2, 3, 4]  # Monday-Friday
+    
+  # Weekly digest schedule
+  weekly_digest:
+    enabled: true
+    # Day of week (4=Friday)
+    day: 4
+    hour: 16
+    minute: 0
+    
+  # Auto-publish settings
+  auto_publish:
+    enabled: false
+    after_days: 7
+    require_min_approvals: 5
+    min_quality_score: 0.85
+
+# Display settings
+display:
+  # Maximum content preview length
+  preview_length: 500
+  
+  # Number of items per page
+  items_per_page: 20
+  
+  # Chart settings
+  charts:
+    daily_performance_days: 7
+    weekly_history_weeks: 4
+    quality_history_days: 30
+    
+  # Date/time format
+  date_format: "%Y-%m-%d"
+  time_format: "%H:%M"
+  datetime_format: "%Y-%m-%d %H:%M"
+
+# Logging configuration
+logging:
+  level: INFO
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  
+  # Log file settings
+  file:
+    enabled: true
+    path: "logs/dashboard.log"
+    max_size_mb: 10
+    backup_count: 5
+    
+  # Console logging
+  console:
+    enabled: true
+    colorize: true
+
+# Security settings
+security:
+  # Secret key for sessions (override in production!)
+  secret_key: ${FLASK_SECRET_KEY:-dev-secret-key-change-in-production}
+  
+  # CORS settings
+  cors_enabled: true
+  cors_origins: ["*"]
+  
+  # Rate limiting
+  rate_limit:
+    enabled: false
+    requests_per_minute: 60
+    
+  # Content Security Policy
+  csp_enabled: false
+  csp_directives:
+    default-src: ["'self'"]
+    script-src: ["'self'", "'unsafe-inline'", "cdn.jsdelivr.net"]
+    style-src: ["'self'", "'unsafe-inline'", "cdn.jsdelivr.net"]
+
+# Development settings
+development:
+  debug: true
+  testing: false
+  
+  # Mock data for development
+  use_mock_data: false
+  
+  # Hot reload
+  auto_reload: true

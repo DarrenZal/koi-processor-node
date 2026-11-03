@@ -1,0 +1,244 @@
+# KOI Infrastructure Ontology
+# Defines component types and relationships for the KOI knowledge pipeline
+# Date: September 26, 2025
+
+@prefix koi: <http://koi.regen.network/ontology#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix dc: <http://purl.org/dc/elements/1.1/> .
+
+# ============================================================================
+# Ontology Declaration
+# ============================================================================
+
+<http://koi.regen.network/ontology#> a owl:Ontology ;
+    rdfs:label "KOI Infrastructure Ontology" ;
+    dc:description "Ontology for the Knowledge Organization Infrastructure (KOI) pipeline components and relationships" ;
+    dc:creator "Regen Network" ;
+    dc:date "2025-09-26" ;
+    owl:versionInfo "1.0.0" .
+
+# ============================================================================
+# Core Component Classes
+# ============================================================================
+
+koi:Component a owl:Class ;
+    rdfs:label "Component" ;
+    rdfs:comment "Base class for all KOI pipeline components" .
+
+koi:Sensor a owl:Class ;
+    rdfs:subClassOf koi:Component ;
+    rdfs:label "Sensor" ;
+    rdfs:comment "Data collection sensor that monitors external sources" .
+
+koi:Processor a owl:Class ;
+    rdfs:subClassOf koi:Component ;
+    rdfs:label "Processor" ;
+    rdfs:comment "Component that processes and transforms data" .
+
+koi:Storage a owl:Class ;
+    rdfs:subClassOf koi:Component ;
+    rdfs:label "Storage" ;
+    rdfs:comment "Data storage component (database, triplestore, etc.)" .
+
+koi:Service a owl:Class ;
+    rdfs:subClassOf koi:Component ;
+    rdfs:label "Service" ;
+    rdfs:comment "Service component that provides functionality to other components" .
+
+koi:Coordinator a owl:Class ;
+    rdfs:subClassOf koi:Processor ;
+    rdfs:label "Coordinator" ;
+    rdfs:comment "Central coordinator that manages sensor events and routing" .
+
+# ============================================================================
+# Content Classes
+# ============================================================================
+
+koi:Document a owl:Class ;
+    rdfs:label "Document" ;
+    rdfs:comment "A document or piece of content processed by the pipeline" .
+
+koi:Event a owl:Class ;
+    rdfs:label "Event" ;
+    rdfs:comment "An event in the KOI protocol (NEW, UPDATE, FORGET)" .
+
+koi:Bundle a owl:Class ;
+    rdfs:label "Bundle" ;
+    rdfs:comment "A KOI bundle containing content and metadata" .
+
+# ============================================================================
+# Component Properties
+# ============================================================================
+
+koi:endpoint a owl:DatatypeProperty ;
+    rdfs:domain koi:Component ;
+    rdfs:range xsd:string ;
+    rdfs:label "endpoint" ;
+    rdfs:comment "HTTP endpoint URL for the component" .
+
+koi:port a owl:DatatypeProperty ;
+    rdfs:domain koi:Component ;
+    rdfs:range xsd:integer ;
+    rdfs:label "port" ;
+    rdfs:comment "Port number the component listens on" .
+
+koi:status a owl:DatatypeProperty ;
+    rdfs:domain koi:Component ;
+    rdfs:range xsd:string ;
+    rdfs:label "status" ;
+    rdfs:comment "Current status of the component (active, idle, offline)" .
+
+koi:componentType a owl:DatatypeProperty ;
+    rdfs:domain koi:Component ;
+    rdfs:range xsd:string ;
+    rdfs:label "componentType" ;
+    rdfs:comment "Type of component (sensor, processor, storage, service)" .
+
+# ============================================================================
+# Sensor Properties
+# ============================================================================
+
+koi:monitors a owl:ObjectProperty ;
+    rdfs:domain koi:Sensor ;
+    rdfs:label "monitors" ;
+    rdfs:comment "Source or resource monitored by the sensor" .
+
+koi:sensorType a owl:DatatypeProperty ;
+    rdfs:domain koi:Sensor ;
+    rdfs:range xsd:string ;
+    rdfs:label "sensorType" ;
+    rdfs:comment "Type of sensor (github, twitter, notion, discourse, etc.)" .
+
+koi:lastActivity a owl:DatatypeProperty ;
+    rdfs:domain koi:Sensor ;
+    rdfs:range xsd:dateTime ;
+    rdfs:label "lastActivity" ;
+    rdfs:comment "Timestamp of last activity from the sensor" .
+
+koi:eventsProcessed a owl:DatatypeProperty ;
+    rdfs:domain koi:Sensor ;
+    rdfs:range xsd:integer ;
+    rdfs:label "eventsProcessed" ;
+    rdfs:comment "Number of events processed by the sensor" .
+
+# ============================================================================
+# Pipeline Flow Relationships
+# ============================================================================
+
+koi:sendsTo a owl:ObjectProperty ;
+    rdfs:domain koi:Component ;
+    rdfs:range koi:Component ;
+    rdfs:label "sendsTo" ;
+    rdfs:comment "Component sends data to another component" .
+
+koi:receivesFrom a owl:ObjectProperty ;
+    rdfs:domain koi:Component ;
+    rdfs:range koi:Component ;
+    rdfs:label "receivesFrom" ;
+    rdfs:comment "Component receives data from another component" ;
+    owl:inverseOf koi:sendsTo .
+
+koi:forwardsTo a owl:ObjectProperty ;
+    rdfs:subPropertyOf koi:sendsTo ;
+    rdfs:domain koi:Processor ;
+    rdfs:range koi:Component ;
+    rdfs:label "forwardsTo" ;
+    rdfs:comment "Processor forwards processed data to another component" .
+
+koi:queriedBy a owl:ObjectProperty ;
+    rdfs:domain koi:Storage ;
+    rdfs:range koi:Service ;
+    rdfs:label "queriedBy" ;
+    rdfs:comment "Storage is queried by a service" .
+
+# ============================================================================
+# Document Provenance Relationships
+# ============================================================================
+
+koi:sensedBy a owl:ObjectProperty ;
+    rdfs:domain koi:Document ;
+    rdfs:range koi:Sensor ;
+    rdfs:label "sensedBy" ;
+    rdfs:comment "Document was collected by a sensor" .
+
+koi:processedBy a owl:ObjectProperty ;
+    rdfs:domain koi:Document ;
+    rdfs:range koi:Processor ;
+    rdfs:label "processedBy" ;
+    rdfs:comment "Document was processed by a processor" .
+
+koi:storedIn a owl:ObjectProperty ;
+    rdfs:domain koi:Document ;
+    rdfs:range koi:Storage ;
+    rdfs:label "storedIn" ;
+    rdfs:comment "Document is stored in a storage component" .
+
+koi:embeddedBy a owl:ObjectProperty ;
+    rdfs:domain koi:Document ;
+    rdfs:range koi:Processor ;
+    rdfs:label "embeddedBy" ;
+    rdfs:comment "Document was embedded by an embedding processor" .
+
+# ============================================================================
+# Event Relationships
+# ============================================================================
+
+koi:hasBundle a owl:ObjectProperty ;
+    rdfs:domain koi:Event ;
+    rdfs:range koi:Bundle ;
+    rdfs:label "hasBundle" ;
+    rdfs:comment "Event contains a bundle" .
+
+koi:eventType a owl:DatatypeProperty ;
+    rdfs:domain koi:Event ;
+    rdfs:range xsd:string ;
+    rdfs:label "eventType" ;
+    rdfs:comment "Type of event (NEW, UPDATE, FORGET)" .
+
+koi:sourceNode a owl:ObjectProperty ;
+    rdfs:domain koi:Event ;
+    rdfs:range koi:Component ;
+    rdfs:label "sourceNode" ;
+    rdfs:comment "Component that generated the event" .
+
+# ============================================================================
+# Metadata Properties
+# ============================================================================
+
+koi:rid a owl:DatatypeProperty ;
+    rdfs:label "rid" ;
+    rdfs:comment "Resource Identifier (RID) in KOI protocol" ;
+    rdfs:range xsd:string .
+
+koi:contentHash a owl:DatatypeProperty ;
+    rdfs:label "contentHash" ;
+    rdfs:comment "SHA-256 hash of the content" ;
+    rdfs:range xsd:string .
+
+koi:timestamp a owl:DatatypeProperty ;
+    rdfs:label "timestamp" ;
+    rdfs:comment "ISO 8601 timestamp" ;
+    rdfs:range xsd:dateTime .
+
+koi:version a owl:DatatypeProperty ;
+    rdfs:label "version" ;
+    rdfs:comment "Version number of the document or component" ;
+    rdfs:range xsd:string .
+
+# ============================================================================
+# Component Status Values (as individuals)
+# ============================================================================
+
+koi:StatusActive a owl:Individual ;
+    rdfs:label "active" ;
+    rdfs:comment "Component is active and processing" .
+
+koi:StatusIdle a owl:Individual ;
+    rdfs:label "idle" ;
+    rdfs:comment "Component is running but idle" .
+
+koi:StatusOffline a owl:Individual ;
+    rdfs:label "offline" ;
+    rdfs:comment "Component is offline or not responding" .

@@ -1,7 +1,7 @@
 # Third-party notices
 
 No third-party source code is bundled in this repository. Dependencies are installed
-separately (pip) and remain under their own licences. The table records each
+separately (pip, Bun/npm) and remain under their own licences. The table records each
 dependency's licence as declared in its package metadata when this export was built.
 
 ## Python dependencies (`requirements.txt`)
@@ -59,3 +59,11 @@ dependency's licence as declared in its package metadata when this export was bu
 | feedparser | BSD-2-Clause |
 | playwright | Apache-2.0 |
 | jsonschema | MIT |
+
+## JavaScript dependencies (`koi-query-api.ts`)
+
+| Package | Declared licence |
+|---|---|
+| express | MIT |
+| cors | MIT |
+| pg | MIT |

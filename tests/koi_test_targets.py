@@ -97,11 +97,18 @@ STATE_FILE_VARS = ("EMBED_REPAIR_STATE_FILE", "KOI_AUTH_LOG_PATH")
 CREDENTIAL_FILE_VARS = ("PGPASSFILE", "KOI_READ_SCOPES_FILE")
 DEFAULT_AUTH_MODE = "log"
 # libpq's own variables. redirect_runtime_config() sets PGHOST, PGPORT and PGDATABASE and
-# removes the rest (REMOVED_VARS).
+# removes PGUSER (LOGIN_VARS) and the rest (REMOVED_VARS).
 PG_VARS = ("PGHOST", "PGPORT", "PGDATABASE", "PGUSER")
 # Removed outright: live-target variables earlier versions of this suite published.
 REMOVED_VARS = ("KOI_LIVE_POSTGRES_URL", "KOI_PEER_POSTGRES_URL", "PEER_URL", "PGHOSTADDR",
                 "PGSERVICE", "PGSERVICEFILE", "KOI_SKIP_LIVE_TRIPWIRE")
+# Removed outright: a login an inherited shell can carry. libpq and asyncpg apply PGUSER,
+# PGPASSWORD and PGOPTIONS to every connection whose URL leaves them out, and code under
+# test builds DSNs from POSTGRES_USER and POSTGRES_PASSWORD, so a live password in the
+# shell would be sent to whatever test server is named. A test database that needs a user
+# or a password must carry it in its KOI_TEST_* URL. (PGSERVICE and PGSERVICEFILE, which
+# can carry the same, are in REMOVED_VARS; PGPASSFILE is emptied by redirect_state_dirs.)
+LOGIN_VARS = ("PGUSER", "PGOPTIONS", "POSTGRES_USER", "PGPASSWORD", "POSTGRES_PASSWORD")
 
 
 # --------------------------------------------------------------------------------------
@@ -365,9 +372,10 @@ def redirect_runtime_config(env: MutableMapping[str, str] = os.environ) -> None:
     """Point runtime target variables at the KOI_TEST_* values or at UNSET_* placeholders.
 
     A refused KOI_TEST_* value is never copied: its variables get the UNSET_* placeholders,
-    and check() ends the run before collection with the refusal.
+    and check() ends the run before collection with the refusal. Inherited logins
+    (LOGIN_VARS) are removed, so credentials come only from the KOI_TEST_* URL.
     """
-    for var in REMOVED_VARS:
+    for var in REMOVED_VARS + LOGIN_VARS:
         env.pop(var, None)
 
     db = _accepted(env, DATABASE_VAR, database_problem)
@@ -454,6 +462,73 @@ def requires_live_llm(*key_vars: str):
     """skipif marker for a test that calls a live LLM API (see live_llm_skip_reason)."""
     import pytest
     reason = live_llm_skip_reason(*key_vars)
+    return pytest.mark.skipif(reason is not None, reason=reason or "")
+
+
+# --------------------------------------------------------------------------------------
+# Tokenizer downloads
+# --------------------------------------------------------------------------------------
+
+ENCODING_DOWNLOAD_VAR = "KOI_TEST_TIKTOKEN_DOWNLOAD"
+
+
+class _DownloadBlocked(Exception):
+    pass
+
+
+def tiktoken_skip_reason(encodings: Iterable[str] = (), models: Iterable[str] = (),
+                         env: Mapping[str, str] = os.environ) -> Optional[str]:
+    """Why a test that needs tiktoken encodings must skip, or None when it may run.
+
+    tiktoken downloads an encoding from openaipublic.blob.core.windows.net the first time
+    it is used, then caches it (TIKTOKEN_CACHE_DIR, else DATA_GYM_CACHE_DIR, else
+    <tempdir>/data-gym-cache). The suite downloads nothing unless KOI_TEST_TIKTOKEN_DOWNLOAD=1:
+    each encoding is loaded here with downloads blocked, so the test runs only when it is
+    already cached. A model name resolves as the code under test resolves it
+    (encoding_for_model, cl100k_base for an unknown model). Without tiktoken installed
+    there is nothing to download, so the test runs.
+    """
+    if env.get(ENCODING_DOWNLOAD_VAR) == "1":
+        return None
+    try:
+        import tiktoken
+        import tiktoken.load as tiktoken_load
+    except ImportError:
+        return None
+    names = list(encodings)
+    for model in models:
+        try:
+            names.append(tiktoken.encoding_name_for_model(model))
+        except KeyError:
+            names.append("cl100k_base")
+    real_read_file = tiktoken_load.read_file
+
+    def read_file(blobpath: str) -> bytes:
+        if blobpath.startswith(("http://", "https://")):
+            raise _DownloadBlocked(blobpath)
+        return real_read_file(blobpath)
+
+    missing = []
+    tiktoken_load.read_file = read_file
+    try:
+        for name in dict.fromkeys(names):
+            try:
+                tiktoken.get_encoding(name)
+            except _DownloadBlocked:
+                missing.append(name)
+    finally:
+        tiktoken_load.read_file = real_read_file
+    if not missing:
+        return None
+    return (f"tiktoken encoding {', '.join(missing)} is not cached, and loading it would "
+            f"download it from the internet. Set {ENCODING_DOWNLOAD_VAR}=1 to allow the "
+            "download, or TIKTOKEN_CACHE_DIR to a directory that holds it")
+
+
+def requires_tiktoken(encodings: Iterable[str] = (), models: Iterable[str] = ()):
+    """skipif marker for a test that loads tiktoken encodings (see tiktoken_skip_reason)."""
+    import pytest
+    reason = tiktoken_skip_reason(encodings, models)
     return pytest.mark.skipif(reason is not None, reason=reason or "")
 
 
