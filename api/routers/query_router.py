@@ -322,16 +322,13 @@ def create_router(pool, caps=None, *, log_pool=None) -> APIRouter:
         )
         serialized = result.model_dump_json()
         if len(serialized) > 100_000:
-            # Trim rows until under 100KB
-            while rows and len(result.model_dump_json()) > 100_000:
-                rows.pop()
+            # Trim rows until under 100KB. The model holds its own copy of the list,
+            # so trim that one: popping `rows` would never shrink what is measured.
+            while result.rows and len(result.model_dump_json()) > 100_000:
+                result.rows.pop()
             truncated = True
-            result = QueryResponse(
-                columns=columns,
-                rows=rows,
-                row_count=len(rows),
-                truncated=True,
-            )
+            result.row_count = len(result.rows)
+            result.truncated = True
 
         # --- Query logging (zero PII — only SQL template, not params) ---
         # Logging needs a WRITABLE pool; the read-only query pool cannot insert.
