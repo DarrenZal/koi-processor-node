@@ -102,7 +102,7 @@ class URLValidator:
         # Block private/reserved IPs
         try:
             ip = ipaddress.ip_address(hostname)
-            if ip.is_private or ip.is_reserved or ip.is_loopback or ip.is_link_local:
+            if not ip.is_global or ip.is_multicast:
                 raise URLValidationError(f"Blocked private IP: {hostname}")
         except ValueError:
             # Not an IP literal — resolve and check
@@ -111,7 +111,7 @@ class URLValidator:
                 for family, _, _, _, sockaddr in resolved:
                     addr = sockaddr[0]
                     ip = ipaddress.ip_address(addr)
-                    if ip.is_private or ip.is_reserved or ip.is_loopback or ip.is_link_local:
+                    if not ip.is_global or ip.is_multicast:
                         raise URLValidationError(
                             f"DNS rebinding: {hostname} resolves to private IP {addr}"
                         )
