@@ -550,6 +550,44 @@ async def test_non_owner_update_rejected(
 
 
 @pytest.mark.anyio
+async def test_peer_claiming_this_node_as_origin_is_rejected(
+    pool, setup_peer, tmp_vault, mock_event_queue, readonly_shared, monkeypatch,
+):
+    """Flag ON, file locally authored, a peer names THIS node as origin_node with a newer seq → rejected."""
+    from api import vault_sync as vs
+    monkeypatch.setattr(vs, "_VAULT_OWNER_UPDATE_ACCEPT", True)
+    mgr = _make_manager(pool, tmp_vault, mock_event_queue)
+    f = tmp_vault / "Shared" / "own-origin.md"
+    await _seed_new(mgr, "Shared/own-origin.md", _BIG, MY_NODE, 1)
+    await mgr.apply_event(**_make_apply_kwargs(
+        "Shared/own-origin.md", "UPDATE", _BIG + "\nnot from this node", base_hash=_sha256(_BIG),
+        origin_node=MY_NODE, origin_seq=2,
+    ))
+    assert f.read_text() == _BIG
+    assert mgr._metrics.rejected_path_authoritative >= 1
+    assert mgr._metrics.readonly_owner_update_accepted == 0
+
+
+@pytest.mark.anyio
+async def test_relayed_update_naming_the_authoring_node_is_still_accepted(
+    pool, setup_peer, tmp_vault, mock_event_queue, readonly_shared, monkeypatch,
+):
+    """Mesh relay: source is one peer, origin is the third node that authored the file → accepted."""
+    from api import vault_sync as vs
+    monkeypatch.setattr(vs, "_VAULT_OWNER_UPDATE_ACCEPT", True)
+    mgr = _make_manager(pool, tmp_vault, mock_event_queue)
+    f = tmp_vault / "Shared" / "relayed.md"
+    await _seed_new(mgr, "Shared/relayed.md", _BIG, PEER_NODE_B, 1)
+    updated = _BIG + "\nrelayed update"
+    await mgr.apply_event(**_make_apply_kwargs(
+        "Shared/relayed.md", "UPDATE", updated, base_hash=_sha256(_BIG),
+        origin_node=PEER_NODE_B, origin_seq=2,
+    ))
+    assert f.read_text() == updated
+    assert mgr._metrics.readonly_owner_update_accepted == 1
+
+
+@pytest.mark.anyio
 async def test_no_local_row_rejected(
     pool, setup_peer, tmp_vault, mock_event_queue, readonly_shared, monkeypatch,
 ):
