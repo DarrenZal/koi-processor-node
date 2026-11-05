@@ -110,6 +110,7 @@ file that fails outright.
 | `083a_mediawiki_redirect_resolver_fresh_install` | See "Replaced". |
 | `123a_entity_registry_revoked_at_fresh_install` | `124` filters on `entity_registry.revoked_at`, which nothing created; live databases have it as `timestamp with time zone`, nullable, no default. |
 | `139a_entity_registry_timestamps_fresh_install` | The API orders `GET /entities` and `GET /entity-search` by `entity_registry.created_at` and reads `updated_at`, but the chain creates `first_seen_at` and `last_seen_at` instead. Without 139a both routes return 500 on a fresh database. Live databases have both columns as `timestamp without time zone`, nullable, `DEFAULT now()`. |
+| `139b_entity_registry_embedding_nullable_fresh_install` | `020` declares `entity_registry.embedding` `NOT NULL`, live databases allow null, and `store_new_entity` writes only `embedding_3072`, so `POST /ingest` could not create an entity on a fresh build. |
 
 ## Proofs, 2026-10-31
 
