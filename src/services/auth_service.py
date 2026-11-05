@@ -22,6 +22,7 @@ import hashlib
 import httpx
 import urllib.parse
 import string
+import html
 from typing import Optional, Dict, Any
 from fastapi import APIRouter, Cookie, HTTPException, Request, Depends, Header, Form
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
@@ -722,7 +723,9 @@ async def activate_page(error: Optional[str] = None):
             "used": "This code has already been used.",
             "locked": "Too many failed attempts. This code has been locked for security.",
         }
-        error_html = f'<div class="error">{error_messages.get(error, error)}</div>'
+        # Known codes only: the query value is never echoed into the page.
+        message = error_messages.get(error, "Something went wrong. Please try again.")
+        error_html = f'<div class="error">{html.escape(message)}</div>'
 
     return ACTIVATE_HTML.format(error_html=error_html)
 
@@ -1024,7 +1027,7 @@ async def get_authorized_user(
 
 
 @router.get("/auth/status")
-async def check_auth_status_legacy(device_code: str, db=Depends(get_db)):
+async def check_auth_status_legacy(http_request: Request, device_code: str, db=Depends(get_db)):
     """
     DEPRECATED: Use POST /auth/token instead.
 
@@ -1034,7 +1037,7 @@ async def check_auth_status_legacy(device_code: str, db=Depends(get_db)):
 
     # Delegate to the new endpoint logic
     request = TokenRequest(device_code=device_code)
-    result = await exchange_device_code(request, db)
+    result = await exchange_device_code(http_request, request, db)
 
     # Convert to old response format
     if isinstance(result, TokenResponse):

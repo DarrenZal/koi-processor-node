@@ -190,7 +190,7 @@ it does not install. Install them yourself if you use the module:
 
 | Package | Needed by |
 |---|---|
-| `PyJWT` | `src/services/auth_service.py`, and so `api/koi_content_api.py`, which mounts it |
+| `PyJWT`, `python-multipart` | `src/services/auth_service.py`, and so `api/koi_content_api.py`, which mounts it |
 | `rdflib` | `api/pipeline_metadata_api.py`, `src/core/namespaces.py`, `src/core/ontology_loader.py`, `src/extraction/llm_extractor.py`, `src/extraction/openai_extractor.py`, `src/provenance/jena_integration.py`, `src/knowledge_graph/graph_integration.py` (which also imports `rdflib_postgresql`), `scripts/regenerate_fuseki_graph.py` (also `SPARQLWrapper`) |
 | `tree-sitter`, `tree-sitter-python`, `tree-sitter-typescript` | the GitHub sensor's extractor, `api/tree_sitter_extractor.py`; `src/core/tree_sitter_extractor.py` also needs `tree-sitter-go` |
 | `terminusdb-client` | the parked TerminusDB mirror: `api/terminusdb_adapter.py` and `scripts/terminusdb/` |
