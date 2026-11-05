@@ -186,13 +186,17 @@ print(json.dumps(p))
 ")
 
 # Send our profile to remote (HandshakeRequest requires type + profile)
-HANDSHAKE_RESPONSE=$(curl -sf -X POST \
+HANDSHAKE_STATUS=$(curl -s -o /dev/null -w '%{http_code}' -X POST \
     -H "Content-Type: application/json" \
     -d "{\"type\": \"handshake\", \"profile\": $LOCAL_PROFILE}" \
     "${PEER_URL}/koi-net/handshake" 2>/dev/null) || \
     log_fatal "Handshake to remote peer failed"
 
-log_info "Local → Remote handshake: sent"
+case "$HANDSHAKE_STATUS" in
+    2*) log_info "Local → Remote handshake: sent" ;;
+    401) log_warn "The remote already knows this node and declined the changed profile. Its operator runs this script on their side to update it." ;;
+    *) log_fatal "Handshake to remote peer failed (HTTP $HANDSHAKE_STATUS)" ;;
+esac
 
 # ============================================
 # STEP 6: Remote → Local handshake
@@ -200,8 +204,15 @@ log_info "Local → Remote handshake: sent"
 
 log_info "Step 6: Registering remote peer locally..."
 
-# Send remote profile to our local node (HandshakeRequest requires type + profile)
+# Send remote profile to our local node (HandshakeRequest requires type + profile).
+# This is the local operator's registration, so it carries the admin token when one is set.
+LOCAL_ADMIN_TOKEN="${KOI_ADMIN_TOKEN:-}"
+LOCAL_TOKEN_FILE="${KOI_STATE_DIR:-$HOME/.config/personal-koi/koi-state}/admin_token"
+if [[ -z "$LOCAL_ADMIN_TOKEN" && -f "$LOCAL_TOKEN_FILE" ]]; then
+    LOCAL_ADMIN_TOKEN=$(cat "$LOCAL_TOKEN_FILE")
+fi
 LOCAL_HS_RESPONSE=$(curl -sf -X POST \
+    -H "Authorization: Bearer $LOCAL_ADMIN_TOKEN" \
     -H "Content-Type: application/json" \
     -d "{\"type\": \"handshake\", \"profile\": $REMOTE_PROFILE}" \
     "${LOCAL_URL}/koi-net/handshake" 2>/dev/null) || \

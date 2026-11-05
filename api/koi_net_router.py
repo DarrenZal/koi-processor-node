@@ -667,6 +667,21 @@ def _wrap_response(payload: Dict[str, Any], target_node: Optional[str], signed: 
     return payload
 
 
+def _handshake_changes_peer(known, peer) -> bool:
+    """True if applying this handshake would alter the stored record of a known peer."""
+    return (
+        known["status"] != "active"
+        or peer.node_name != known["node_name"]
+        or peer.node_type != known["node_type"]
+        or peer.base_url != known["base_url"]
+        or (peer.encryption_key is not None and peer.encryption_key != known["encryption_key"])
+        or (peer.ontology_uri is not None and peer.ontology_uri != known["ontology_uri"])
+        or (peer.ontology_version is not None and peer.ontology_version != known["ontology_version"])
+        or sorted(peer.provides.event or []) != sorted(known["provides_event"] or [])
+        or sorted(peer.provides.state or []) != sorted(known["provides_state"] or [])
+    )
+
+
 def _read_admin_token() -> Optional[str]:
     """Read admin token from env or state dir file."""
     admin_token = os.getenv("KOI_ADMIN_TOKEN")
@@ -736,7 +751,8 @@ def _enforce_commons_admin(request: Request) -> Optional[JSONResponse]:
 async def _check_approved_edge(source_node: str, direction: str = "any") -> bool:
     """Return True if source_node has an APPROVED edge relationship with us.
 
-    direction="poll": source polls us (source_node=source, target_node=us) — for fetch/poll gating
+    direction="poll": we serve the caller (source_node=us, target_node=caller), the edge
+    /events/poll checks and /edges/approve opens — for fetch gating
     direction="any": any approved edge in either direction — for broadcast/confirm gating
     """
     if not _db_pool or not _node_profile:
@@ -744,7 +760,7 @@ async def _check_approved_edge(source_node: str, direction: str = "any") -> bool
     async with _db_pool.acquire() as conn:
         if direction == "poll":
             edge = await conn.fetchrow(
-                "SELECT 1 FROM koi_net_edges WHERE source_node = $1 AND target_node = $2 AND status = 'APPROVED'",
+                "SELECT 1 FROM koi_net_edges WHERE source_node = $2 AND target_node = $1 AND status = 'APPROVED'",
                 source_node, _node_profile.node_rid,
             )
         else:  # "any" — either direction
@@ -780,7 +796,36 @@ async def handshake(request: Request):
     peer = req.profile
 
     # Store/update peer in koi_net_nodes
+    is_local_operator = _enforce_local_admin(request) is None
     async with _db_pool.acquire() as conn:
+        known = await conn.fetchrow(
+            "SELECT node_name, node_type, base_url, public_key, encryption_key, ontology_uri, "
+            "ontology_version, provides_event, provides_state, status "
+            "FROM koi_net_nodes WHERE node_rid = $1",
+            peer.node_rid,
+        )
+        # Unsigned handshakes are for first contact. A known peer with a pinned key changes only
+        # under that key's signature or from the local operator; presenting the matching public
+        # key proves nothing, because the key is public. An unsigned handshake that changes
+        # nothing stays harmless, so re-running registration and creating missing edges still
+        # work. A mismatched key is refused just below as KEY_MISMATCH.
+        may_update = (
+            not known
+            or not known["public_key"]
+            or (signed and source_node == peer.node_rid)
+            or is_local_operator
+        )
+        if (
+            not may_update
+            and not (peer.public_key and peer.public_key != known["public_key"])
+            and _handshake_changes_peer(known, peer)
+        ):
+            return _protocol_error(
+                401, "SIGNED_HANDSHAKE_REQUIRED",
+                f"Changing {peer.node_rid} requires an envelope signed by its pinned key "
+                "or the local operator",
+            )
+
         # Key pinning check: reject if peer presents a different key than what's pinned
         if peer.public_key:
             existing_key = await conn.fetchval(
@@ -817,7 +862,7 @@ async def handshake(request: Request):
                 encryption_key = COALESCE(EXCLUDED.encryption_key, koi_net_nodes.encryption_key),
                 ontology_uri = COALESCE(EXCLUDED.ontology_uri, koi_net_nodes.ontology_uri),
                 ontology_version = COALESCE(EXCLUDED.ontology_version, koi_net_nodes.ontology_version),
-                last_seen = NOW(),
+                last_seen = CASE WHEN $11::boolean THEN NOW() ELSE koi_net_nodes.last_seen END,
                 status = 'active'
             """,
             peer.node_rid,
@@ -830,13 +875,12 @@ async def handshake(request: Request):
             peer.provides.state if peer.provides else [],
             peer.ontology_uri,
             peer.ontology_version,
+            may_update,
         )
 
         # Server-side deferral for unknown nodes (membrane governance)
         defer_for_unknown = _bool_env("KOI_NET_DEFER_UNKNOWN_HANDSHAKE", False)
-        is_known = await conn.fetchval(
-            "SELECT 1 FROM koi_net_nodes WHERE node_rid = $1", peer.node_rid
-        )
+        is_known = known is not None  # read before the upsert above wrote this node
         effective_defer = req.defer_approval or (defer_for_unknown and not is_known)
         if effective_defer and not req.defer_approval and not is_known:
             logger.warning(
@@ -853,13 +897,16 @@ async def handshake(request: Request):
             INSERT INTO koi_net_edges
                 (edge_rid, source_node, target_node, edge_type, status, rid_types)
             VALUES ($1, $2, $3, 'POLL', $5, $4)
-            ON CONFLICT (edge_rid) DO UPDATE SET updated_at = NOW(), rid_types = EXCLUDED.rid_types
+            ON CONFLICT (edge_rid) DO UPDATE SET
+                updated_at = NOW(),
+                rid_types = CASE WHEN $6::boolean THEN EXCLUDED.rid_types ELSE koi_net_edges.rid_types END
             """,
             edge_rid_inbound,
             peer.node_rid,
             _node_profile.node_rid,
             peer.provides.event if peer.provides else [],
             inbound_status,
+            may_update,
         )
 
         # Create outbound POLL edge (PROPOSED — peer wants to poll us, requires approval)
@@ -869,12 +916,15 @@ async def handshake(request: Request):
             INSERT INTO koi_net_edges
                 (edge_rid, source_node, target_node, edge_type, status, rid_types)
             VALUES ($1, $2, $3, 'POLL', 'PROPOSED', $4)
-            ON CONFLICT (edge_rid) DO UPDATE SET updated_at = NOW(), rid_types = EXCLUDED.rid_types
+            ON CONFLICT (edge_rid) DO UPDATE SET
+                updated_at = NOW(),
+                rid_types = CASE WHEN $5::boolean THEN EXCLUDED.rid_types ELSE koi_net_edges.rid_types END
             """,
             edge_rid_outbound,
             _node_profile.node_rid,
             peer.node_rid,
             _node_profile.provides.event if _node_profile.provides else [],
+            may_update,
         )
 
         # Auto-create alias using full node_name (short aliases are manual)
@@ -883,10 +933,12 @@ async def handshake(request: Request):
                 """
                 INSERT INTO koi_net_peer_aliases (alias, node_rid)
                 VALUES ($1, $2)
-                ON CONFLICT (alias) DO UPDATE SET node_rid = $2
+                ON CONFLICT (alias) DO UPDATE SET
+                    node_rid = CASE WHEN $3::boolean THEN EXCLUDED.node_rid ELSE koi_net_peer_aliases.node_rid END
                 """,
                 peer.node_name.lower(),
                 peer.node_rid,
+                is_local_operator,  # only the local operator moves an existing name to another node
             )
 
     # Invalidate cached E2EE shared key on handshake (key may have rotated)
@@ -985,6 +1037,13 @@ async def events_poll(request: Request):
     limit = payload.get("limit", 50)
     if not isinstance(limit, int) or limit <= 0:
         limit = 50
+
+    # Same identity rule as the other gated routes: while the gate is on, an unsigned caller
+    # is unidentified, whatever node_id it names.
+    if not source_node and _security_policy()["require_approved_edge_for_poll"]:
+        logger.info("Poll: unsigned request, returning empty (gate on)")
+        resp = EventsPayloadResponse(events=[])
+        return JSONResponse(content=_wrap_response(resp.model_dump(exclude_none=True), None, False))
 
     rid_types = None
     has_approved_edge = False
