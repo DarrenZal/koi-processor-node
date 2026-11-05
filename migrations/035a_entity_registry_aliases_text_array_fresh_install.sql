@@ -66,8 +66,9 @@ BEGIN
     IF _stats_def IS NOT NULL THEN
         _stats_def := replace(_stats_def, 'jsonb_array_length', 'array_length');
         _stats_def := replace(_stats_def, '''[]''::jsonb', '''{}''::text[]');
-        _stats_def := replace(_stats_def, 'COALESCE(entity_registry.aliases, ''{}''::text[])', 'entity_registry.aliases');
-        _stats_def := replace(_stats_def, 'array_length(entity_registry.aliases)', 'array_length(entity_registry.aliases, 1)');
+        -- pg_get_viewdef prints the column qualified on PostgreSQL 14 and plain on 16: accept both.
+        _stats_def := regexp_replace(_stats_def, 'COALESCE\((entity_registry\.)?aliases, ''\{\}''::text\[\]\)', '\1aliases', 'g');
+        _stats_def := regexp_replace(_stats_def, 'array_length\((entity_registry\.)?aliases\)', 'array_length(\1aliases, 1)', 'g');
         EXECUTE 'CREATE VIEW entity_resolution_stats AS ' || _stats_def;
     END IF;
     RAISE NOTICE 'Converted entity_registry.aliases from JSONB to TEXT[]';
