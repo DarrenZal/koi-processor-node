@@ -807,6 +807,11 @@ class VaultSyncManager:
                     and local_row is not None
                     and not local_row["is_deleted"]
                     and local_row["origin_node"] == origin_node
+                    # A note this node authored is never updated from outside. An honest echo of
+                    # our own event stops at the stale-event guard above, so a claim of our own
+                    # origin that reaches this point is not an honest event. A relayed event
+                    # naming a third node as origin is unaffected.
+                    and origin_node != self.node_rid
                 )
                 if owner_updating_own and _VAULT_OWNER_UPDATE_SHRINK_RATIO > 0:
                     # Stub-collapse guard: reject a rich->stub owner UPDATE (base_hash

@@ -75,11 +75,52 @@ validate_peer_number() {
     fi
 }
 
+is_wg_pubkey() {
+    # A WireGuard public key is 32 bytes in canonical base64: 43 characters and one '='.
+    # The 43rd character carries 2 padding bits, which must be zero. The key is written into
+    # WireGuard config that runs as root, so nothing else passes (no space, newline or quote).
+    [[ "$1" =~ ^[A-Za-z0-9+/]{42}[AEIMQUYcgkosw048]=$ ]]
+}
+
 validate_wg_pubkey() {
-    local key="$1"
-    # WireGuard public keys are 44-char base64 (32 bytes + padding)
-    if [[ ${#key} -ne 44 ]] || ! echo "$key" | base64 -d &>/dev/null; then
-        log_fatal "Invalid WireGuard public key: must be 44-char base64"
+    if ! is_wg_pubkey "$1"; then
+        log_fatal "Invalid WireGuard public key: must be 32 bytes as 44-char base64"
+    fi
+}
+
+is_node_rid() {
+    # A node RID as KOI-net writes it: orn:koi-net.node:<name>+<16 to 64 hex>.
+    [[ "$1" =~ ^orn:koi-net\.node:[A-Za-z0-9._-]+\+[0-9a-fA-F]{16,64}$ ]]
+}
+
+validate_join_identity() {
+    # Check a join request's node RID and KOI public key before anything stores them. The key
+    # must be canonical base64 of a P-256 public key (DER SubjectPublicKeyInfo, 91 bytes), and
+    # the RID's hash must be derived from that key in one of the forms api/node_identity.py
+    # accepts (b64_64, legacy16, der64).
+    # Args: <node-rid> <koi-public-key>
+    if ! is_node_rid "$1"; then
+        log_fatal "Refusing: the join request's node_rid is not a well-formed node RID"
+    fi
+    local reason
+    if ! reason=$(LIB_NODE_RID="$1" LIB_KOI_PUBKEY="$2" python3 -c "
+import base64, binascii, hashlib, os, sys
+P256_SPKI_PREFIX = bytes.fromhex('3059301306072a8648ce3d020106082a8648ce3d030107034200')
+rid, key = os.environ['LIB_NODE_RID'], os.environ['LIB_KOI_PUBKEY']
+try:
+    der = base64.b64decode(key, validate=True)
+except (binascii.Error, ValueError):
+    der = b''
+if len(der) != 91 or not der.startswith(P256_SPKI_PREFIX) or der[26] != 4 or base64.b64encode(der).decode() != key:
+    print('the koi_public_key is not a base64 P-256 public key (DER SubjectPublicKeyInfo)')
+    sys.exit(1)
+suffix = rid.rsplit('+', 1)[1]
+b64_64 = hashlib.sha256(key.encode()).hexdigest()
+if suffix not in (b64_64, b64_64[:16], hashlib.sha256(der).hexdigest()):
+    print('the node_rid is not derived from the koi_public_key')
+    sys.exit(1)
+"); then
+        log_fatal "Refusing: ${reason:-the node_rid and koi_public_key of the join request could not be checked}"
     fi
 }
 
@@ -125,11 +166,13 @@ peer_registry_add() {
             local peer_name
             peer_name=$(echo "$entry_json" | python3 -c "import sys,json; print(json.load(sys.stdin)['peer_name'])")
             local existing
-            existing=$(python3 -c "
-import json, sys
-reg = json.load(open('$PEER_REGISTRY'))
+            # The entry can carry a joining peer's own values (approve-peer.sh --from-file), so
+            # every value reaches Python through the environment, never pasted into its source.
+            existing=$(LIB_PEER_REGISTRY="$PEER_REGISTRY" LIB_PEER_NAME="$peer_name" python3 -c "
+import json, os, sys
+reg = json.load(open(os.environ['LIB_PEER_REGISTRY']))
 for p in reg:
-    if p['peer_name'] == '$peer_name' and p.get('status') == 'active':
+    if p['peer_name'] == os.environ['LIB_PEER_NAME'] and p.get('status') == 'active':
         print('exists')
         sys.exit(0)
 print('ok')
@@ -139,12 +182,12 @@ print('ok')
             fi
 
             # Append entry
-            python3 -c "
-import json, sys
-reg = json.load(open('$PEER_REGISTRY'))
-entry = json.loads('''$entry_json''')
+            LIB_PEER_REGISTRY="$PEER_REGISTRY" LIB_ENTRY_JSON="$entry_json" LIB_TMPFILE="$tmpfile" python3 -c "
+import json, os
+reg = json.load(open(os.environ['LIB_PEER_REGISTRY']))
+entry = json.loads(os.environ['LIB_ENTRY_JSON'])
 reg.append(entry)
-with open('$tmpfile', 'w') as f:
+with open(os.environ['LIB_TMPFILE'], 'w') as f:
     json.dump(reg, f, indent=2)
 "
             mv "$tmpfile" "$PEER_REGISTRY"
@@ -196,22 +239,28 @@ peer_registry_update_status() {
         (
             flock -w 5 200 || log_fatal "Failed to acquire peer registry lock"
 
-            python3 -c "
-import json, sys
+            # remove-peer.sh can pass a remote node's own node_name, so every value reaches Python
+            # through the environment, never pasted into its source.
+            PEER_NAME="$peer_name" NEW_STATUS="$new_status" EXTRA_FIELD="$extra_field" EXTRA_VALUE="$extra_value" \
+            PEER_REGISTRY_PATH="$PEER_REGISTRY" LIB_TMPFILE="$tmpfile" python3 -c "
+import json, os, sys
+peer_name = os.environ['PEER_NAME']
+extra_field = os.environ['EXTRA_FIELD']
+extra_value = os.environ['EXTRA_VALUE']
 LIVE = {'invited', 'approving', 'active'}
-reg = json.load(open('$PEER_REGISTRY'))
+reg = json.load(open(os.environ['PEER_REGISTRY_PATH']))
 # Find last matching live entry (most recent append)
 target_idx = None
 for i, p in enumerate(reg):
-    if p['peer_name'] == '$peer_name' and p.get('status', '') in LIVE:
+    if p['peer_name'] == peer_name and p.get('status', '') in LIVE:
         target_idx = i
 if target_idx is None:
-    print('Peer not found (live): $peer_name', file=sys.stderr)
+    print(f'Peer not found (live): {peer_name}', file=sys.stderr)
     sys.exit(1)
-reg[target_idx]['status'] = '$new_status'
-if '$extra_field' and '$extra_value':
-    reg[target_idx]['$extra_field'] = '$extra_value'
-with open('$tmpfile', 'w') as f:
+reg[target_idx]['status'] = os.environ['NEW_STATUS']
+if extra_field and extra_value:
+    reg[target_idx][extra_field] = extra_value
+with open(os.environ['LIB_TMPFILE'], 'w') as f:
     json.dump(reg, f, indent=2)
 "
             mv "$tmpfile" "$PEER_REGISTRY"
@@ -262,11 +311,14 @@ peer_registry_lookup() {
     # Look up a peer by name or node_rid, output JSON entry
     local query="$1"
     peer_registry_init
-    python3 -c "
-import json, sys
-reg = json.load(open('$PEER_REGISTRY'))
+    # The query can come from a remote node's /health (connect-peers.sh passes its node_name),
+    # so it reaches Python through the environment, never pasted into its source.
+    LIB_PEER_REGISTRY="$PEER_REGISTRY" LIB_QUERY="$query" python3 -c "
+import json, os, sys
+query = os.environ['LIB_QUERY']
+reg = json.load(open(os.environ['LIB_PEER_REGISTRY']))
 for p in reg:
-    if p['peer_name'] == '$query' or p.get('node_rid') == '$query':
+    if p['peer_name'] == query or p.get('node_rid') == query:
         json.dump(p, sys.stdout, indent=2)
         sys.exit(0)
 print('', file=sys.stderr)
@@ -296,18 +348,36 @@ relay_config_edit() {
     # Transactional edit of WireGuard config on relay VPS
     # Args: <ssh-target> <action> [action-args...]
     # Actions: add-peer <pubkey> <ip>, remove-peer <pubkey>
+    # The script runs as root on the relay. The key and IP are checked here, whatever the
+    # caller checked, and reach the script as quoted assignments that it reads as data: they
+    # are never spliced into its source.
     local ssh_target="$1"
     local action="$2"
     shift 2
 
+    local pubkey="${1:-}" peer_ip=""
+    if ! is_wg_pubkey "$pubkey"; then
+        log_error "Relay config edit refused: not a well-formed WireGuard public key"
+        return 1
+    fi
+
     local remote_script
     case "$action" in
         add-peer)
-            local pubkey="$1" peer_ip="$2"
+            peer_ip="${2:-}"
+            if [[ ! "$peer_ip" =~ ^10\.100\.0\.([0-9]{1,3})$ ]] || (( BASH_REMATCH[1] < 2 || BASH_REMATCH[1] > 254 )); then
+                log_error "Relay config edit refused: invalid peer IP '$peer_ip' (expected 10.100.0.2-254)"
+                return 1
+            fi
             remote_script="$(cat <<'REMOTE_EOF'
 set -euo pipefail
-LOCKFILE="/tmp/wg-koi.lock"
+# The lock lives in /run, which only root can write, and is never followed as a symlink.
+LOCKFILE="/run/wg-koi.lock"
 CONF="/etc/wireguard/wg-koi.conf"
+if [[ -L "$LOCKFILE" ]]; then
+    echo "FAIL: $LOCKFILE is a symlink"
+    exit 1
+fi
 
 (
     flock -w 10 200 || { echo "FAIL: Could not acquire lock"; exit 1; }
@@ -317,7 +387,7 @@ CONF="/etc/wireguard/wg-koi.conf"
     cp "$CONF" "$BACKUP"
 
     # Check for duplicate
-    if grep -q "PUBKEY_PLACEHOLDER" "$CONF"; then
+    if grep -qF -- "$PUBKEY" "$CONF"; then
         echo "FAIL: Peer with this public key already exists"
         exit 1
     fi
@@ -328,8 +398,8 @@ CONF="/etc/wireguard/wg-koi.conf"
     cat >> "$TMPCONF" <<PEER
 
 [Peer]
-PublicKey = PUBKEY_PLACEHOLDER
-AllowedIPs = IP_PLACEHOLDER/32
+PublicKey = $PUBKEY
+AllowedIPs = $PEER_IP/32
 PEER
 
     # Syntax check
@@ -352,17 +422,18 @@ PEER
 ) 200>"$LOCKFILE"
 REMOTE_EOF
 )"
-            # Substitute placeholders
-            remote_script="${remote_script//PUBKEY_PLACEHOLDER/$pubkey}"
-            remote_script="${remote_script//IP_PLACEHOLDER/$peer_ip}"
             ;;
 
         remove-peer)
-            local pubkey="$1"
             remote_script="$(cat <<'REMOTE_EOF'
 set -euo pipefail
-LOCKFILE="/tmp/wg-koi.lock"
+# The lock lives in /run, which only root can write, and is never followed as a symlink.
+LOCKFILE="/run/wg-koi.lock"
 CONF="/etc/wireguard/wg-koi.conf"
+if [[ -L "$LOCKFILE" ]]; then
+    echo "FAIL: $LOCKFILE is a symlink"
+    exit 1
+fi
 
 (
     flock -w 10 200 || { echo "FAIL: Could not acquire lock"; exit 1; }
@@ -373,22 +444,22 @@ CONF="/etc/wireguard/wg-koi.conf"
 
     # Remove peer block matching pubkey
     TMPCONF="${CONF}.tmp.$$"
-    python3 -c "
-import re, sys
-conf = open('$CONF').read()
+    WG_PUBKEY="$PUBKEY" WG_CONF="$CONF" WG_TMPCONF="$TMPCONF" python3 -c "
+import os, re, sys
+conf = open(os.environ['WG_CONF']).read()
 # Split into blocks, remove the one with matching pubkey
 blocks = re.split(r'(?=\[Peer\])', conf)
 filtered = []
 removed = False
 for b in blocks:
-    if 'PUBKEY_PLACEHOLDER' in b:
+    if os.environ['WG_PUBKEY'] in b:
         removed = True
     else:
         filtered.append(b)
 if not removed:
     print('FAIL: Peer not found in config', file=sys.stderr)
     sys.exit(1)
-with open('$TMPCONF', 'w') as f:
+with open(os.environ['WG_TMPCONF'], 'w') as f:
     f.write(''.join(filtered).rstrip() + '\n')
 "
 
@@ -413,13 +484,15 @@ with open('$TMPCONF', 'w') as f:
 ) 200>"$LOCKFILE"
 REMOTE_EOF
 )"
-            remote_script="${remote_script//PUBKEY_PLACEHOLDER/$pubkey}"
             ;;
 
         *)
             log_fatal "Unknown relay config action: $action"
             ;;
     esac
+
+    # The values go first, as assignments quoted by printf %q (bash on both ends).
+    remote_script="$(printf 'PUBKEY=%q\nPEER_IP=%q\n' "$pubkey" "$peer_ip")"$'\n'"$remote_script"
 
     if $DRY_RUN; then
         echo "[DRY-RUN] Would execute transactional config edit on $ssh_target:"
@@ -454,6 +527,34 @@ compute_koi_fingerprint() {
     echo "SHA256:${hash}"
 }
 
+koi_node_identity() {
+    # Load or create this node's KOI identity with koi-processor's node_identity module.
+    # Args: <koi-processor-dir> <koi-state-dir> <node-name>
+    # Output: node_rid=, koi_public_key= and fingerprint= lines (the fingerprint is SHA256 of
+    # the DER bytes, as compute_koi_fingerprint computes it).
+    # The paths and name reach Python through the environment, never pasted into its source.
+    LIB_KOI_PATH="$1" KOI_STATE_DIR="$2" LIB_NODE_NAME="$3" python3 -c "
+import os, sys
+from base64 import b64decode, b64encode
+import hashlib
+sys.path.insert(0, os.environ['LIB_KOI_PATH'])
+from api.node_identity import load_or_create_identity, get_public_key_der_b64
+
+# load_or_create_identity may return (private_key, profile) or
+# (private_key, profile, encryption_private_key) depending on version.
+identity = load_or_create_identity(os.environ['LIB_NODE_NAME'])
+if not isinstance(identity, tuple) or len(identity) < 2:
+    raise RuntimeError(f'Unexpected identity return shape: {type(identity)}')
+private_key, profile = identity[0], identity[1]
+koi_pubkey = get_public_key_der_b64(private_key)
+fp_hash = hashlib.sha256(b64decode(koi_pubkey)).digest()
+
+print(f'node_rid={profile.node_rid}')
+print(f'koi_public_key={koi_pubkey}')
+print('fingerprint=SHA256:' + b64encode(fp_hash).decode().rstrip('='))
+"
+}
+
 # ============================================
 # MIGRATION RUNNER
 # ============================================
@@ -480,12 +581,14 @@ run_migrations() {
 
     ensure_python_module "psycopg2" "psycopg2-binary"
 
-    python3 -c "
+    # The URL and paths reach Python through the environment, never pasted into its source:
+    # a quote in a password or path would otherwise end the string literal.
+    LIB_PG_URL="$pg_url" LIB_MIG_DIR="$mig_dir" LIB_MANIFEST_PATH="$manifest_path" python3 -c "
 import os, sys, glob, re, psycopg2
 
-pg_url = '$pg_url'
-mig_dir = '$mig_dir'
-manifest_path = '$manifest_path'
+pg_url = os.environ['LIB_PG_URL']
+mig_dir = os.environ['LIB_MIG_DIR']
+manifest_path = os.environ['LIB_MANIFEST_PATH']
 
 conn = psycopg2.connect(pg_url)
 conn.autocommit = True
@@ -717,11 +820,13 @@ parse_join_request() {
     # Parse a join request block, output key=value pairs
     # Args: <file-or-stdin>
     local input="${1:--}"
-    python3 -c "
-import sys, re
+    # The path reaches Python through the environment, never pasted into its source.
+    LIB_INPUT="$input" python3 -c "
+import os, sys, re
 from datetime import datetime, timezone
 
-text = open('$input').read() if '$input' != '-' else sys.stdin.read()
+source = os.environ['LIB_INPUT']
+text = open(source).read() if source != '-' else sys.stdin.read()
 
 # Extract fields between markers
 match = re.search(r'=== KOI-net Join Request ===(.*?)==========================', text, re.DOTALL)
@@ -780,7 +885,12 @@ ensure_python_module() {
     local module="$1"
     local pip_package="${2:-$module}"
 
-    if python3 -c "import $module" 2>/dev/null; then
+    # The name reaches Python as an argument, never pasted into its source, and must be a
+    # dotted module name.
+    if [[ ! "$module" =~ ^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)*$ ]]; then
+        log_fatal "Invalid Python module name '$module'"
+    fi
+    if _python_module_importable "$module"; then
         return 0
     fi
 
@@ -796,22 +906,26 @@ ensure_python_module() {
     fi
 
     # Fallback: project venv pip if available.
-    if ! python3 -c "import $module" 2>/dev/null; then
+    if ! _python_module_importable "$module"; then
         if [[ -f "$KOI_PROCESSOR_DIR/venv/bin/pip" ]]; then
             "$KOI_PROCESSOR_DIR/venv/bin/pip" install -q "$pip_package" >/dev/null 2>&1 || true
         fi
     fi
 
     # Final fallback: pip3 if available.
-    if ! python3 -c "import $module" 2>/dev/null; then
+    if ! _python_module_importable "$module"; then
         if command -v pip3 >/dev/null 2>&1; then
             pip3 install -q "$pip_package" >/dev/null 2>&1 || true
         fi
     fi
 
-    if ! python3 -c "import $module" 2>/dev/null; then
+    if ! _python_module_importable "$module"; then
         log_fatal "Required Python module not found: $module (install with: python3 -m pip install $pip_package)"
     fi
+}
+
+_python_module_importable() {
+    python3 -c 'import importlib, sys; importlib.import_module(sys.argv[1])' "$1" 2>/dev/null
 }
 
 require_python_module() {
@@ -841,9 +955,11 @@ compute_sas() {
     # Canonical SAS: sort keys, SHA256, first 4 bytes as uint32 mod 1000000, zero-pad to 6 digits
     # Args: <koi_pubkey_a> <koi_pubkey_b>
     local key_a="$1" key_b="$2"
-    python3 -c "
-import hashlib
-keys = sorted(['$key_a', '$key_b'])
+    # Keys reach Python through the environment, never pasted into its source: one is a
+    # remote node's, from its /health.
+    SAS_KEY_A="$key_a" SAS_KEY_B="$key_b" python3 -c "
+import hashlib, os
+keys = sorted([os.environ['SAS_KEY_A'], os.environ['SAS_KEY_B']])
 digest = hashlib.sha256(f'{keys[0]}:{keys[1]}'.encode()).digest()
 num = int.from_bytes(digest[:4], 'big') % 1000000
 print(f'{num:06d}')
@@ -858,15 +974,22 @@ peer_registry_lookup_by_number() {
     # Look up a peer by peer_number (WG IP last octet), output JSON entry
     # Returns the most recent invited/approving/active entry (skips cancelled/removed)
     local peer_number="$1"
-    peer_registry_init
-    python3 -c "
-import json, sys
-reg = json.load(open('$PEER_REGISTRY'))
+    # A lookup writes nothing: with no registry there is no match.
+    [[ -f "$PEER_REGISTRY" ]] || return 1
+    # Values reach Python through the environment, never pasted into its source. A peer
+    # number that is not an integer matches nothing.
+    LIB_PEER_REGISTRY="$PEER_REGISTRY" LIB_PEER_NUMBER="$peer_number" python3 -c "
+import json, os, sys
+reg = json.load(open(os.environ['LIB_PEER_REGISTRY']))
+try:
+    number = int(os.environ['LIB_PEER_NUMBER'])
+except ValueError:
+    sys.exit(1)
 # Return last matching entry with a live status (most recent append wins)
 LIVE_STATUSES = {'invited', 'approving', 'active'}
 match = None
 for p in reg:
-    if p.get('peer_number') == $peer_number and p.get('status', '') in LIVE_STATUSES:
+    if p.get('peer_number') == number and p.get('status', '') in LIVE_STATUSES:
         match = p
 if match:
     json.dump(match, sys.stdout, indent=2)
@@ -881,12 +1004,13 @@ decode_invite_token() {
     local token_str="$1"
     local script_dir
     script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-    python3 -c "
-import sys
-sys.path.insert(0, '$script_dir')
+    # The token comes from the inviting side, so it reaches Python through the environment,
+    # never pasted into its source: decode_token checks its format.
+    LIB_SCRIPT_DIR="$script_dir" LIB_TOKEN="$token_str" python3 -c "
+import json, os, sys
+sys.path.insert(0, os.environ['LIB_SCRIPT_DIR'])
 from invite_token import decode_token
-import json
-payload = decode_token('$token_str')
+payload = decode_token(os.environ['LIB_TOKEN'])
 json.dump(payload, sys.stdout, indent=2)
 "
 }

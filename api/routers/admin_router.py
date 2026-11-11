@@ -422,8 +422,20 @@ def create_router(pool) -> APIRouter:
             survivor))
         rewired["pending_relationships"] = pr
 
+        # Deployments differ: a fresh personal install has no signals or requirements table.
+        # A failed statement would abort the merge's transaction, so check first, as
+        # capture_reversal does.
+        async def _present(table: str, col: str) -> bool:
+            return await conn.fetchval(
+                "SELECT to_regclass($1) IS NOT NULL "
+                "AND EXISTS (SELECT 1 FROM information_schema.columns "
+                "            WHERE table_name = $2 AND column_name = $3)",
+                table, table, col)
+
         # --- 4. Plain text columns (no UNIQUE on the URI column).
         for table, col in _PLAIN_REF_COLS:
+            if not await _present(table, col):
+                continue
             n = _count(await conn.execute(
                 f"UPDATE {table} SET {col} = $2 WHERE {col} = $1", loser, survivor))
             if n:
@@ -431,6 +443,8 @@ def create_router(pool) -> APIRouter:
 
         # --- 5. Array columns (text[]).
         for table, col in _ARRAY_REF_COLS:
+            if not await _present(table, col):
+                continue
             n = _count(await conn.execute(
                 f"UPDATE {table} SET {col} = array_replace({col}, $1, $2) "
                 f"WHERE $1 = ANY({col})", loser, survivor))
@@ -439,6 +453,8 @@ def create_router(pool) -> APIRouter:
 
         # --- 6. JSONB metadata text-replace (guarded by LIKE).
         for table, col in _JSONB_METADATA_COLS:
+            if not await _present(table, col):
+                continue
             n = _count(await conn.execute(
                 f"UPDATE {table} SET {col} = REPLACE({col}::text, $1, $2)::jsonb "
                 f"WHERE {col}::text LIKE '%' || $1 || '%'", loser, survivor))
@@ -797,10 +813,22 @@ def create_router(pool) -> APIRouter:
                 # try/except -- a merge that cannot be reversed must fail rather
                 # than silently record itself as one that can. That is the whole
                 # difference between this and the 262 pre-118 merges.
+                # The checks above ran without locks. Lock both rows in a fixed order and
+                # re-check, so opposing merges cannot each tombstone the other's survivor.
+                locked = {r["fuseki_uri"]: r["merged_into"] for r in await conn.fetch(
+                    "SELECT fuseki_uri, merged_into FROM entity_registry "
+                    "WHERE fuseki_uri = ANY($1::text[]) ORDER BY fuseki_uri FOR UPDATE",
+                    [survivor, loser])}
+                if locked.get(survivor) is not None or locked.get(loser) is not None:
+                    raise HTTPException(
+                        status_code=409,
+                        detail="survivor or loser was merged concurrently; retry")
+
+                # The except HTTPException below rolls back; rolling back here as well
+                # makes asyncpg raise and turns this refusal into a 500.
                 if not body.allow_persona_merge:
                     hazard = await persona_merge_hazard(conn, loser)
                     if hazard:
-                        await tx.rollback()
                         raise HTTPException(status_code=409, detail=hazard)
 
                 reversal = await capture_reversal(conn, loser=loser, survivor=survivor)

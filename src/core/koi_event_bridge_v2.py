@@ -12,9 +12,8 @@ import httpx
 import hashlib
 from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException
 from fastapi.responses import JSONResponse
-from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import logging
 import uuid
@@ -29,25 +28,37 @@ from koi_event_filter import filter_koi_event
 # Import provenance to RDF
 from provenance_to_rdf import ProvenanceToRDF
 
+# Shared service-to-service auth, request validation and DSN masking.
+import service_auth
+
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# FastAPI app
-app = FastAPI(title="KOI Event Bridge v2", version="2.0.0")
-
-# Add CORS middleware to allow dashboard access
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # Allow all origins for development
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+# FastAPI app. Docs are disabled and no wildcard CORS is added: this is an
+# internal service that must be safe on its own regardless of nginx.
+app = FastAPI(
+    title="KOI Event Bridge v2",
+    version="2.0.0",
+    docs_url=None,
+    redoc_url=None,
+    openapi_url=None,
 )
+
+# Service-key dependency for this service. The mode is read at request time from
+# KOI_AUTH_MODE_BRIDGE (only "warn" warns; anything else enforces).
+bridge_auth = service_auth.make_service_key_dependency("BRIDGE")
 
 # Configuration
 DB_URL = os.getenv('POSTGRES_URL', 'postgresql://postgres:postgres@localhost:5433/eliza')
 BGE_API_URL = os.getenv('BGE_API_URL', 'http://localhost:8090/encode')
+# The bridge's timeout for a bge call must sit ABOVE bge's own total budget
+# (OpenAI timeout + queue wait), which PR4 keeps below this. Configurable so the
+# two can be tuned together without a code change.
+BGE_TIMEOUT = float(os.getenv('KOI_BGE_TIMEOUT', '120'))
+# Bind loopback by default; loopback is never trusted for auth (GAIA and the
+# query API proxy from localhost), it only limits the default listen interface.
+BIND_HOST = os.getenv('KOI_BIND_HOST', '127.0.0.1')
 USE_ISOLATED_TABLES = os.getenv('USE_ISOLATED_TABLES', 'true').lower() == 'true'
 KG_EXTRACTION_ENABLED = os.getenv('KG_EXTRACTION_ENABLED', 'false').lower() == 'true'
 LEDGER_ENTITY_INDEXING_ENABLED = os.getenv('LEDGER_ENTITY_INDEXING_ENABLED', 'true').lower() == 'true'
@@ -154,19 +165,23 @@ class ProcessingResult(BaseModel):
 # Helper functions
 async def generate_embedding_bge(text: str) -> List[float]:
     """Generate BGE embedding via API"""
-    async with httpx.AsyncClient(timeout=30.0) as client:
+    async with httpx.AsyncClient(timeout=BGE_TIMEOUT) as client:
         try:
+            # lane=ingest: the bridge is the bulk/background caller, so bge keeps
+            # interactive search (lane=query, the default) from being starved.
             response = await client.post(
                 BGE_API_URL,
-                json={"text": text}  # Some servers use "text"
+                json={"text": text, "lane": "ingest"}  # Some servers use "text"
             )
-            if response.status_code != 200:
-                # Try with "input" field
+            # Retry with the "input" field name only for a field-shape mismatch.
+            # Do NOT retry on overload (503) or payload-too-large (413): a retry
+            # cannot help and only doubles the load on an already-struggling bge.
+            if response.status_code != 200 and response.status_code not in (503, 413):
                 response = await client.post(
                     BGE_API_URL,
-                    json={"input": text}
+                    json={"input": text, "lane": "ingest"}
                 )
-            
+
             if response.status_code == 200:
                 result = response.json()
                 return result.get("embedding", [])
@@ -463,7 +478,11 @@ async def create_new_version(conn: asyncpg.Connection, event: KOIEvent,
         # Privacy: promote bundle-metadata is_private/access_source to dedicated columns.
         # Sticky-OR on ON CONFLICT — once-private-stays-private (Phase 1 / tech-backlog #23).
         bundle_meta = event.bundle.manifest.metadata or {}
-        is_private = bool(bundle_meta.get('is_private', False))
+        # Use the full 3-location privacy predicate (manifest / contents /
+        # contents.document metadata) so a flag carried only in contents metadata
+        # is not silently stored as public. access_source keeps its manifest-level
+        # value for provenance of why the row is private.
+        is_private = service_auth.bundle_is_private(event.bundle.dict())
         access_source = bundle_meta.get('access_source')
 
         # Insert new version with publication tracking
@@ -969,10 +988,32 @@ async def process_koi_event(event: KOIEvent) -> ProcessingResult:
                     }
                 )
 
-            # Write provenance to RDF knowledge graph
+            # Write provenance to RDF knowledge graph.
+            # R27: Fuseki's query endpoint is public, so never write a private
+            # document's RID or title there. Skip the write for private events,
+            # using the same privacy predicate the row write uses.
             try:
-                prdf = ProvenanceToRDF()
-                if await prdf.check_fuseki_connection():
+                # Treat the event as private if THIS event is private OR the RID
+                # is already private in the DB. The row write uses sticky-OR
+                # privacy, so a later flag-less update of a previously-private doc
+                # must not now write its RID/title to the public Fuseki endpoint.
+                rid_for_privacy = event.bundle.rid if event.bundle else event.rid
+                is_private_event = service_auth.bundle_is_private(
+                    event.bundle.dict() if event.bundle else None
+                )
+                if not is_private_event and event.bundle:
+                    existing_priv = await conn.fetchrow(
+                        "SELECT is_private, access_source FROM koi_memories WHERE rid = $1",
+                        event.bundle.rid,
+                    )
+                    if existing_priv and (existing_priv["is_private"] or existing_priv["access_source"]):
+                        is_private_event = True
+                if is_private_event:
+                    logger.info(f"Skipping RDF provenance for private event: {rid_for_privacy}")
+                    prdf = None
+                else:
+                    prdf = ProvenanceToRDF()
+                if prdf is not None and await prdf.check_fuseki_connection():
                     # Extract sensor ID from source_node
                     sensor_id = event.source_node.split(":")[-1] if ":" in event.source_node else event.source_node
 
@@ -989,7 +1030,7 @@ async def process_koi_event(event: KOIEvent) -> ProcessingResult:
                         cat_receipt_id=cat_receipt_id
                     )
                     logger.info(f"Wrote provenance to RDF for {event.bundle.rid}")
-                else:
+                elif prdf is not None:
                     logger.warning("Apache Jena Fuseki not available for provenance writing")
             except Exception as e:
                 logger.error(f"Failed to write provenance to RDF: {e}")
@@ -1051,7 +1092,7 @@ async def root():
         "isolated_tables": USE_ISOLATED_TABLES
     }
 
-@app.post("/process-koi-event", response_model=ProcessingResult)
+@app.post("/process-koi-event", response_model=ProcessingResult, dependencies=[Depends(bridge_auth)])
 async def process_event_endpoint(event: KOIEvent):
     """Process a KOI event from the coordinator"""
     rid = event.bundle.rid if event.bundle else event.rid
@@ -1070,6 +1111,19 @@ async def process_event_endpoint(event: KOIEvent):
             error="Event filtered: non-content (heartbeat/test/monitoring)"
         )
 
+    # event_type allowlist + identifier/timestamp/hash validation, under the
+    # same mode switch as the key check. In enforce mode an invalid event is
+    # rejected with 400 before any Fuseki write; in warn mode it is logged as
+    # "would reject" and still processed, so the rollout can observe real traffic.
+    problems = service_auth.validate_koi_event(event_dict)
+    if problems:
+        detail = "; ".join(problems)
+        if service_auth.auth_mode("BRIDGE") == "warn":
+            logger.warning(f"[KOI Bridge v2] WOULD REJECT (warn) {rid}: {detail}")
+        else:
+            logger.warning(f"[KOI Bridge v2] REJECT {rid}: {detail}")
+            raise HTTPException(status_code=400, detail=detail)
+
     # Process the event
     result = await process_koi_event(event)
     
@@ -1082,7 +1136,7 @@ async def process_event_endpoint(event: KOIEvent):
     status_code = 200 if result.success else 500
     return JSONResponse(status_code=status_code, content=result.dict())
 
-@app.get("/stats")
+@app.get("/stats", dependencies=[Depends(bridge_auth)])
 async def get_stats():
     """Get pipeline statistics"""
     try:
@@ -1145,6 +1199,10 @@ async def get_stats():
 async def startup():
     """Create database connection pool on startup"""
     global db_pool
+    # Refuse to start without a usable service key, in warn or enforce mode. This
+    # runs at startup, never at import, so the semantic bridge can import this
+    # module with no environment set.
+    service_auth.assert_keys_configured("BRIDGE")
     logger.info("Creating database connection pool...")
     try:
         db_pool = await asyncpg.create_pool(
@@ -1179,22 +1237,32 @@ def _masked_dsn(dsn: str) -> str:
 
 if __name__ == "__main__":
     import argparse
+    import sys
     import uvicorn
 
-    # A server: run with no arguments it starts on 0.0.0.0:8100 and creates its database
-    # pool, as before. --help prints this and exits; other arguments are ignored, as before.
+    # --preflight loads config the same way and exits non-zero if the service key
+    # is not configured, without starting the server.
+    if "--preflight" in sys.argv:
+        ok, message = service_auth.preflight("BRIDGE")
+        logger.info(message)
+        sys.exit(0 if ok else 1)
+
+    # A server: run with no arguments it starts on KOI_BIND_HOST:8100 (loopback by
+    # default) and creates its database pool. --help prints this and exits; other
+    # arguments are ignored, as before.
     argparse.ArgumentParser(
-        description="KOI Event Bridge v2: serves /process-koi-event on 0.0.0.0:8100 and stores "
+        description="KOI Event Bridge v2: serves /process-koi-event on KOI_BIND_HOST:8100 and stores "
                     "events in the database POSTGRES_URL names (default eliza on localhost:5433). "
                     "Run with no arguments to start it."
     ).parse_known_args()
 
     logger.info("="*70)
     logger.info("KOI EVENT BRIDGE v2 STARTING")
-    logger.info(f"Database: {_masked_dsn(DB_URL)}")
+    logger.info(f"Database: {service_auth.mask_dsn(DB_URL)}")
     logger.info(f"BGE API: {BGE_API_URL}")
     logger.info(f"Using isolated tables: {USE_ISOLATED_TABLES}")
-    logger.info(f"Features: Deduplication, Versioning, Isolated Tables")
+    logger.info(f"Auth mode: {service_auth.auth_mode('BRIDGE')}")
+    logger.info(f"Bind host: {BIND_HOST}")
     logger.info("="*70)
-    
-    uvicorn.run(app, host="0.0.0.0", port=8100, log_level="info", access_log=True)
+
+    uvicorn.run(app, host=BIND_HOST, port=8100, log_level="info", access_log=True)

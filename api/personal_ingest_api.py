@@ -3566,6 +3566,9 @@ async def ingest_extraction(request: IngestRequest):
     # (document_rid, entity_uri, context) for doclink federation emits — fired
     # AFTER the transaction below commits (2e rule). Group A site.
     doclink_emits: List[tuple] = []
+    # (event type, canonical, extracted entity) for entity federation emits, fired after
+    # the transaction commits for the same reason.
+    entity_emits: List[tuple] = []
 
     async with db_pool.acquire() as conn:
         async with conn.transaction():
@@ -3600,8 +3603,6 @@ async def ingest_extraction(request: IngestRequest):
                             resolution_caller="personal_ingest_api.ingest",
                         )
                         logger.info(f"Resolved: {canonical.name} -> {canonical.uri} (new={is_new})")
-                        canonical_entities.append(canonical)
-                        entity_uri_map[normalize_entity_text(entity.name)] = canonical.uri
 
                         if is_new and not await store_new_entity(
                                 conn, entity, canonical, request.document_rid, source=request.source):
@@ -3619,14 +3620,11 @@ async def ingest_extraction(request: IngestRequest):
                                     canonical.merged_with = (
                                         entity.name if live["entity_text"] != entity.name else None)
                                 canonical.uri = live_uri
-                                entity_uri_map[normalize_entity_text(entity.name)] = live_uri
                             canonical.is_new = False
                             is_new = False
                         if is_new:
-                            new_count += 1
                             logger.info(f"Stored new entity: {canonical.uri}")
                         else:
-                            resolved_count += 1
                             # Vault-path annotation (P2, annotate-only). Mutates the
                             # already-appended canonical in place. One indexed query.
                             (canonical.vault_path,
@@ -3635,20 +3633,6 @@ async def ingest_extraction(request: IngestRequest):
                                 conn, canonical.uri, canonical.type
                             )
                             logger.info(f"Resolved to existing: {canonical.uri}")
-
-                        # Emit federation event for entity replication. The type is the
-                        # resolved row's: a peer's apply overwrites entity_type, and a
-                        # cross-type match (Tier 1.1b, or a create collision followed to
-                        # its survivor) would otherwise retype the survivor on every peer.
-                        emit_domain_event = _optional_federation_attr("api.federation_events", "emit_domain_event")
-                        await emit_domain_event("entity", "NEW" if is_new else "UPDATE", canonical.uri, {
-                            "fuseki_uri": canonical.uri,
-                            "entity_text": canonical.name,
-                            "entity_type": canonical.type or entity.type,
-                            "normalized_text": canonical.name.lower().strip(),
-                            "aliases": [],
-                            "metadata": {},
-                        })
 
                         # Link entity to document
                         await conn.execute("""
@@ -3673,6 +3657,16 @@ async def ingest_extraction(request: IngestRequest):
                     failed_entities.append({"name": entity.name, "error": str(e)})
                     # Continue with other entities — nested transaction already
                     # rolled back so the outer txn is still healthy.
+                else:
+                    # The savepoint committed: only now does this entity count, and only
+                    # now may it be reported, linked by a relationship or federated.
+                    canonical_entities.append(canonical)
+                    entity_uri_map[normalize_entity_text(entity.name)] = canonical.uri
+                    if is_new:
+                        new_count += 1
+                    else:
+                        resolved_count += 1
+                    entity_emits.append(("NEW" if is_new else "UPDATE", canonical, entity))
 
             # --- Process relationships (still inside conn.transaction()) ---
             rel_count = 0
@@ -3738,6 +3732,21 @@ async def ingest_extraction(request: IngestRequest):
                         logger.warning(f"Skipping relationship (FK violation): {e}")
                     except asyncpg.exceptions.CheckViolationError as e:
                         logger.warning(f"Skipping relationship (check violation): {e}")
+
+    # Emit entity federation events only now, for entities whose savepoint committed.
+    # The type is the resolved row's: a peer's apply overwrites entity_type, and a cross-type
+    # match (Tier 1.1b, or a create collision followed to its survivor) would otherwise
+    # retype the survivor on every peer.
+    emit_domain_event = _optional_federation_attr("api.federation_events", "emit_domain_event")
+    for kind, canonical, entity in entity_emits:
+        await emit_domain_event("entity", kind, canonical.uri, {
+            "fuseki_uri": canonical.uri,
+            "entity_text": canonical.name,
+            "entity_type": canonical.type or entity.type,
+            "normalized_text": canonical.name.lower().strip(),
+            "aliases": [],
+            "metadata": {},
+        })
 
     # Emit doclink federation events AFTER the transaction above commits (2e
     # rule — emitting inside the txn would queue events for rows a rollback

@@ -19,6 +19,11 @@ KOI_PORT="${KOI_API_PORT:-8351}"
 STATE_DIR="${KOI_STATE_DIR:-$HOME/.config/personal-koi/koi-state}"
 ADMIN_TOKEN_FILE="$STATE_DIR/admin_token"
 
+# Values reach SQL as psql variables (:'name', quoted by psql), never pasted into the query,
+# and the admin token reaches curl through a file descriptor, never its argv (as in
+# connect-peers.sh). The database is personal_koi unless KOI_PSQL_DB says otherwise.
+PSQL_DB="${KOI_PSQL_DB:-personal_koi}"
+
 # ============================================
 # RESOLVE PEER RID
 # ============================================
@@ -26,42 +31,21 @@ ADMIN_TOKEN_FILE="$STATE_DIR/admin_token"
 if [[ "$PEER_ID" == orn:koi-net.node:* ]]; then
     PEER_RID="$PEER_ID"
 else
-    # Look up by alias then by node_name
-    PEER_RID=$(python3 -c "
-import sys, json, urllib.request
-
-# Try peer_aliases table via psql
-import subprocess
-result = subprocess.run(
-    ['psql', '-d', 'personal_koi', '-Atc',
-     \"SELECT node_rid FROM koi_net_peer_aliases WHERE alias = '${PEER_ID}'\"],
-    capture_output=True, text=True
-)
-rids = [r.strip() for r in result.stdout.strip().split('\n') if r.strip()]
-if not rids:
-    # Try node_name
-    result = subprocess.run(
-        ['psql', '-d', 'personal_koi', '-Atc',
-         \"SELECT node_rid FROM koi_net_nodes WHERE lower(node_name) = lower('${PEER_ID}')\"],
-        capture_output=True, text=True
-    )
-    rids = [r.strip() for r in result.stdout.strip().split('\n') if r.strip()]
-
-if len(rids) == 0:
-    print('NOT_FOUND', file=sys.stderr)
-    sys.exit(1)
-if len(rids) > 1:
-    print('AMBIGUOUS', file=sys.stderr)
-    sys.exit(2)
-print(rids[0])
-" 2>/tmp/approve-edges-err) || {
-        ERR=$(cat /tmp/approve-edges-err)
-        if [[ "$ERR" == "AMBIGUOUS" ]]; then
-            log_fatal "Ambiguous peer name '$PEER_ID' — use exact node_rid instead"
-        else
-            log_fatal "Peer '$PEER_ID' not found in database"
-        fi
-    }
+    # An alias first, then a node name.
+    RIDS=$(psql -d "$PSQL_DB" -At -v id="$PEER_ID" -v ON_ERROR_STOP=1 <<'SQL'
+SELECT node_rid FROM koi_net_peer_aliases WHERE alias = :'id'
+UNION
+SELECT node_rid FROM koi_net_nodes WHERE lower(node_name) = lower(:'id')
+  AND NOT EXISTS (SELECT 1 FROM koi_net_peer_aliases WHERE alias = :'id');
+SQL
+) || log_fatal "Peer lookup failed (psql -d $PSQL_DB)"
+    COUNT=$(printf '%s\n' "$RIDS" | grep -c . || true)
+    if [[ "$COUNT" -eq 0 ]]; then
+        log_fatal "Peer '$PEER_ID' not found in database"
+    elif [[ "$COUNT" -gt 1 ]]; then
+        log_fatal "Ambiguous peer name '$PEER_ID' — use exact node_rid instead"
+    fi
+    PEER_RID="$RIDS"
 fi
 
 log_info "Resolved peer: $PEER_RID"
@@ -90,11 +74,11 @@ fi
 # FIND PROPOSED EDGES
 # ============================================
 
-EDGE_RIDS=$(psql -d personal_koi -Atc "
-    SELECT edge_rid FROM koi_net_edges WHERE status='PROPOSED'
-      AND ((source_node='$LOCAL_RID' AND target_node='$PEER_RID')
-        OR (source_node='$PEER_RID' AND target_node='$LOCAL_RID'))
-")
+EDGE_RIDS=$(psql -d "$PSQL_DB" -At -v me="$LOCAL_RID" -v peer="$PEER_RID" -v ON_ERROR_STOP=1 <<'SQL'
+SELECT edge_rid FROM koi_net_edges WHERE status = 'PROPOSED'
+  AND ((source_node = :'me' AND target_node = :'peer') OR (source_node = :'peer' AND target_node = :'me'));
+SQL
+) || log_fatal "Edge lookup failed"
 
 if [[ -z "$EDGE_RIDS" ]]; then
     log_info "No PROPOSED edges found between $LOCAL_RID and $PEER_RID"
@@ -113,10 +97,11 @@ while IFS= read -r edge_rid; do
     [[ -z "$edge_rid" ]] && continue
     log_info "Approving edge: $edge_rid"
 
+    BODY=$(AP_EDGE_RID="$edge_rid" python3 -c "import json,os; print(json.dumps({'edge_rid': os.environ['AP_EDGE_RID']}))")
     RESPONSE=$(curl -sf -X POST "http://127.0.0.1:${KOI_PORT}/koi-net/edges/approve" \
         -H "Content-Type: application/json" \
-        -H "Authorization: Bearer $ADMIN_TOKEN" \
-        -d "{\"edge_rid\": \"$edge_rid\"}" 2>&1) || {
+        -H @<(printf 'Authorization: Bearer %s\n' "$ADMIN_TOKEN") \
+        -d "$BODY" 2>/dev/null) || {
         log_error "Failed to approve edge: $edge_rid"
         FAILED=$((FAILED + 1))
         continue

@@ -99,24 +99,31 @@ printf "  rejected_total: %s\n" "$PEER_REJECTED"
 printf "  reconcile_drift: %s\n" "$PEER_DRIFT"
 
 # --- Append JSONL record ---
-RECORD=$(python3 -c "
-import json, sys
+# The PEER_* values are whatever the peer's API returned, so every value reaches Python through
+# the environment, never pasted into its source.
+RECORD=$(SC_TIMESTAMP="$TIMESTAMP" SC_PEER_NAME="$PEER_NAME" \
+    SC_LOCAL_PENDING="$LOCAL_PENDING" SC_LOCAL_SCANS="$LOCAL_SCANS" SC_LOCAL_WATCHER="$LOCAL_WATCHER" \
+    SC_LOCAL_REJECTED="$LOCAL_REJECTED" SC_LOCAL_DRIFT="$LOCAL_DRIFT" \
+    SC_PEER_PENDING="$PEER_PENDING" SC_PEER_SCANS="$PEER_SCANS" SC_PEER_WATCHER="$PEER_WATCHER" \
+    SC_PEER_REJECTED="$PEER_REJECTED" SC_PEER_DRIFT="$PEER_DRIFT" python3 -c "
+import json, os
+e = os.environ
 print(json.dumps({
-    'timestamp': '${TIMESTAMP}',
+    'timestamp': e['SC_TIMESTAMP'],
     'local': {
-        'pending_events': '${LOCAL_PENDING}',
-        'scans_completed': '${LOCAL_SCANS}',
-        'watcher_enabled': '${LOCAL_WATCHER}',
-        'rejected_total': '${LOCAL_REJECTED}',
-        'reconcile_drift': '${LOCAL_DRIFT}',
+        'pending_events': e['SC_LOCAL_PENDING'],
+        'scans_completed': e['SC_LOCAL_SCANS'],
+        'watcher_enabled': e['SC_LOCAL_WATCHER'],
+        'rejected_total': e['SC_LOCAL_REJECTED'],
+        'reconcile_drift': e['SC_LOCAL_DRIFT'],
     },
     'peer': {
-        'name': '${PEER_NAME}',
-        'pending_events': '${PEER_PENDING}',
-        'scans_completed': '${PEER_SCANS}',
-        'watcher_enabled': '${PEER_WATCHER}',
-        'rejected_total': '${PEER_REJECTED}',
-        'reconcile_drift': '${PEER_DRIFT}',
+        'name': e['SC_PEER_NAME'],
+        'pending_events': e['SC_PEER_PENDING'],
+        'scans_completed': e['SC_PEER_SCANS'],
+        'watcher_enabled': e['SC_PEER_WATCHER'],
+        'rejected_total': e['SC_PEER_REJECTED'],
+        'reconcile_drift': e['SC_PEER_DRIFT'],
     }
 }))
 ")

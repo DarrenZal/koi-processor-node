@@ -11,6 +11,10 @@ import fs from 'fs';
 import path from 'path';
 import { Pool } from "pg";
 
+// R26 fix: dedicated, path-pinned rid-lookup proxy (replaces the removed generic
+// proxyToService that forwarded req.originalUrl to the internal services).
+import { createRidLookupHandler, RID_LOOKUP_ROUTE } from "./koi-service-proxy.ts";
+
 // Import the adaptive features
 import {
   reciprocalRankFusion,
@@ -3095,49 +3099,18 @@ app.post('/api/koi/graph', async (req, res) => {
   }
 });
 
-// Proxy middleware for KOI services
-const proxyToService = (serviceUrl: string) => {
-  return async (req: express.Request, res: express.Response) => {
-    try {
-      const targetUrl = `${serviceUrl}${req.originalUrl}`;
-      const response = await fetch(targetUrl, {
-        method: req.method,
-        headers: {
-          'Content-Type': 'application/json',
-          ...req.headers
-        },
-        body: req.method !== 'GET' ? JSON.stringify(req.body) : undefined
-      });
-
-      const data = await response.text();
-      res.status(response.status);
-
-      // Set content type based on response
-      const contentType = response.headers.get('content-type');
-      if (contentType) {
-        res.set('Content-Type', contentType);
-      }
-
-      res.send(data);
-    } catch (error) {
-      console.error(`Proxy error for ${req.originalUrl}:`, error);
-      res.status(503).json({
-        error: 'Service unavailable',
-        service: serviceUrl,
-        message: error instanceof Error ? error.message : 'Unknown error'
-      });
-    }
-  };
-};
-
-// KOI Service Proxies (Development API Gateway)
-// Note: /api/koi/graph is handled directly above, not proxied
-app.use('/api/koi/coordinator/', proxyToService('http://localhost:8005'));
-app.use('/api/koi/event-bridge/', proxyToService('http://localhost:8100'));
-app.use('/api/koi/bge/', proxyToService('http://localhost:8090'));
-app.use('/api/koi/transformations', proxyToService('http://localhost:8002'));
-app.use('/api/koi/rids', proxyToService('http://localhost:8002'));
-app.use('/api/koi/rid-lookup', proxyToService('http://localhost:8002'));
+// R26 fix: the generic proxyToService mounts to coordinator :8005, event-bridge
+// :8100, bge :8090 and pipeline-metadata :8002 are removed. They forwarded
+// req.originalUrl verbatim, so a crafted path could escape the mount and reach
+// any internal path (the A1 nginx blocks were routable around through this
+// proxy). /api/koi/graph, /api/koi/entity/* and /api/koi/stats are served
+// directly elsewhere in this file; /api/koi/transformations and /api/koi/rids
+// are reached through nginx directly on :8002 and never needed this proxy.
+//
+// The one client-facing consumer, kb_rid_lookup in the published regen-koi-mcp,
+// is preserved as a dedicated GET handler pinned to the /api/koi/rid-lookup/
+// space on the upstream (see koi-service-proxy.ts).
+app.get(RID_LOOKUP_ROUTE, createRidLookupHandler());
 
 // Auth status check - for MCP server to validate user authentication
 // SECURITY: Uses device_code binding to prevent IDOR attacks

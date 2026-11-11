@@ -74,16 +74,21 @@ PEER_NUMBER="${2:-}"
 
 validate_peer_name "$PEER_NAME"
 validate_ssh_target "$RELAY_SSH"
+if [[ ! "$TTL_HOURS" =~ ^[1-9][0-9]{0,3}$ ]]; then
+    log_fatal "Invalid --ttl '$TTL_HOURS': must be a whole number of hours, 1-9999"
+fi
 
 peer_registry_init
 
 if [[ -z "$PEER_NUMBER" ]]; then
     log_info "No peer number provided; auto-selecting next available number..."
-    PEER_NUMBER=$(python3 -c "
-import json
+    # Every value in this script reaches Python through the environment, never pasted into
+    # its source.
+    PEER_NUMBER=$(CI_PEER_REGISTRY="$PEER_REGISTRY" python3 -c "
+import json, os
 from pathlib import Path
 
-registry_path = Path('$PEER_REGISTRY')
+registry_path = Path(os.environ['CI_PEER_REGISTRY'])
 live_status = {'active', 'invited', 'approving'}
 used = set()
 
@@ -124,14 +129,15 @@ validate_peer_number "$PEER_NUMBER"
 PEER_IP="10.100.0.${PEER_NUMBER}"
 
 # Check peer_name not already in a live state
-EXISTING=$(python3 -c "
-import json, sys
-reg = json.load(open('$PEER_REGISTRY'))
+EXISTING=$(CI_PEER_REGISTRY="$PEER_REGISTRY" CI_PEER_NAME="$PEER_NAME" python3 -c "
+import json, os, sys
+name = os.environ['CI_PEER_NAME']
+reg = json.load(open(os.environ['CI_PEER_REGISTRY']))
 for p in reg:
-    if p['peer_name'] == '$PEER_NAME' and p.get('status') in ('active', 'approving'):
+    if p['peer_name'] == name and p.get('status') in ('active', 'approving'):
         print(p['status'])
         sys.exit(0)
-    if p['peer_name'] == '$PEER_NAME' and p.get('status') == 'invited':
+    if p['peer_name'] == name and p.get('status') == 'invited':
         print('invited')
         sys.exit(0)
 print('ok')
@@ -160,11 +166,12 @@ if [[ "$EXISTING" == "invited" ]]; then
 fi
 
 # Check peer_number not already assigned
-EXISTING_NUM=$(python3 -c "
-import json, sys
-reg = json.load(open('$PEER_REGISTRY'))
+EXISTING_NUM=$(CI_PEER_REGISTRY="$PEER_REGISTRY" CI_PEER_NUMBER="$PEER_NUMBER" python3 -c "
+import json, os, sys
+number = int(os.environ['CI_PEER_NUMBER'])
+reg = json.load(open(os.environ['CI_PEER_REGISTRY']))
 for p in reg:
-    if p.get('peer_number') == $PEER_NUMBER and p.get('status') in ('active', 'invited', 'approving'):
+    if p.get('peer_number') == number and p.get('status') in ('active', 'invited', 'approving'):
         print(p['peer_name'])
         sys.exit(0)
 print('')
@@ -194,6 +201,8 @@ if ! $DRY_RUN; then
         RELAY_PUBKEY=$(run_ssh "$RELAY_SSH" "sudo cat /etc/wireguard/koi_private.key | wg pubkey" 2>/dev/null) || \
             log_fatal "Cannot fetch relay public key via SSH"
     fi
+    # The relay's answer goes into the token and from there into the peer's WireGuard config.
+    validate_wg_pubkey "$RELAY_PUBKEY"
 else
     RELAY_PUBKEY="<relay-public-key-dry-run>"
 fi
@@ -227,27 +236,34 @@ log_info "Generating invite token..."
 
 STATE_DIR="${KOI_STATE_DIR:-$HOME/.config/personal-koi/koi-state}"
 
+# The token's values, for the two builders below.
+export CI_SCRIPT_DIR="$SCRIPT_DIR" CI_STATE_DIR="$STATE_DIR" CI_PEER_NAME="$PEER_NAME" \
+    CI_PEER_NUMBER="$PEER_NUMBER" CI_RELAY_PUBKEY="$RELAY_PUBKEY" CI_RELAY_ENDPOINT="$RELAY_ENDPOINT" \
+    CI_ADMIN_BASE_URL="$ADMIN_BASE_URL" CI_ADMIN_WG_IP="$ADMIN_WG_IP" \
+    CI_VAULT_SYNC_FOLDER="$VAULT_SYNC_FOLDER" CI_TTL_HOURS="$TTL_HOURS"
+
 if $DRY_RUN; then
     # Dry-run: generate token with ephemeral secret (no disk writes)
     TOKEN=$(python3 -c "
 import sys, os, time, json, secrets
-sys.path.insert(0, '$SCRIPT_DIR')
+sys.path.insert(0, os.environ['CI_SCRIPT_DIR'])
 from invite_token import create_token, generate_jti
 
 secret = secrets.token_bytes(32)  # ephemeral, not persisted
 now = int(time.time())
+env = os.environ
 payload = {
     'v': 1,
     'jti': generate_jti(),
-    'peer_name': '$PEER_NAME',
-    'peer_number': $PEER_NUMBER,
-    'relay_pubkey': '$RELAY_PUBKEY',
-    'relay_endpoint': '${RELAY_ENDPOINT}:51820',
-    'admin_base_url': '$ADMIN_BASE_URL',
-    'admin_wg_ip': '$ADMIN_WG_IP',
-    'vault_sync_folder': '$VAULT_SYNC_FOLDER',
+    'peer_name': env['CI_PEER_NAME'],
+    'peer_number': int(env['CI_PEER_NUMBER']),
+    'relay_pubkey': env['CI_RELAY_PUBKEY'],
+    'relay_endpoint': env['CI_RELAY_ENDPOINT'] + ':51820',
+    'admin_base_url': env['CI_ADMIN_BASE_URL'],
+    'admin_wg_ip': env['CI_ADMIN_WG_IP'],
+    'vault_sync_folder': env['CI_VAULT_SYNC_FOLDER'],
     'issued_at': now,
-    'expires_at': now + ($TTL_HOURS * 3600),
+    'expires_at': now + int(env['CI_TTL_HOURS']) * 3600,
 }
 print(create_token(payload, secret))
 ") || log_fatal "Failed to generate invite token"
@@ -255,39 +271,40 @@ print(create_token(payload, secret))
 else
     TOKEN=$(python3 -c "
 import sys, os, time, json
-sys.path.insert(0, '$SCRIPT_DIR')
+sys.path.insert(0, os.environ['CI_SCRIPT_DIR'])
 from invite_token import create_token, verify_token, load_or_create_secret, generate_jti
 
-secret = load_or_create_secret('$STATE_DIR')
+secret = load_or_create_secret(os.environ['CI_STATE_DIR'])
 now = int(time.time())
+env = os.environ
 payload = {
     'v': 1,
     'jti': generate_jti(),
-    'peer_name': '$PEER_NAME',
-    'peer_number': $PEER_NUMBER,
-    'relay_pubkey': '$RELAY_PUBKEY',
-    'relay_endpoint': '${RELAY_ENDPOINT}:51820',
-    'admin_base_url': '$ADMIN_BASE_URL',
-    'admin_wg_ip': '$ADMIN_WG_IP',
-    'vault_sync_folder': '$VAULT_SYNC_FOLDER',
+    'peer_name': env['CI_PEER_NAME'],
+    'peer_number': int(env['CI_PEER_NUMBER']),
+    'relay_pubkey': env['CI_RELAY_PUBKEY'],
+    'relay_endpoint': env['CI_RELAY_ENDPOINT'] + ':51820',
+    'admin_base_url': env['CI_ADMIN_BASE_URL'],
+    'admin_wg_ip': env['CI_ADMIN_WG_IP'],
+    'vault_sync_folder': env['CI_VAULT_SYNC_FOLDER'],
     'issued_at': now,
-    'expires_at': now + ($TTL_HOURS * 3600),
+    'expires_at': now + int(env['CI_TTL_HOURS']) * 3600,
 }
 token = create_token(payload, secret)
 
 # Round-trip verify
 verified = verify_token(token, secret)
-assert verified['peer_name'] == '$PEER_NAME', 'Round-trip verification failed'
+assert verified['peer_name'] == env['CI_PEER_NAME'], 'Round-trip verification failed'
 
 print(token)
 ") || log_fatal "Failed to generate invite token"
 
     # Extract JTI for registry
-    JTI=$(python3 -c "
-import sys
-sys.path.insert(0, '$SCRIPT_DIR')
+    JTI=$(CI_TOKEN="$TOKEN" python3 -c "
+import os, sys
+sys.path.insert(0, os.environ['CI_SCRIPT_DIR'])
 from invite_token import decode_token
-payload = decode_token('$TOKEN')
+payload = decode_token(os.environ['CI_TOKEN'])
 print(payload['jti'])
 ")
 fi
@@ -300,16 +317,17 @@ log_info "Recording invite in peer registry..."
 
 ADDED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 
-REGISTRY_ENTRY=$(python3 -c "
-import json
+REGISTRY_ENTRY=$(CI_PEER_IP="$PEER_IP" CI_JTI="$JTI" CI_ADDED_AT="$ADDED_AT" python3 -c "
+import json, os
+env = os.environ
 entry = {
-    'peer_name': '$PEER_NAME',
-    'peer_number': $PEER_NUMBER,
-    'wg_ip': '$PEER_IP',
-    'jti': '$JTI',
+    'peer_name': env['CI_PEER_NAME'],
+    'peer_number': int(env['CI_PEER_NUMBER']),
+    'wg_ip': env['CI_PEER_IP'],
+    'jti': env['CI_JTI'],
     'status': 'invited',
     'consumed': False,
-    'added_at': '$ADDED_AT',
+    'added_at': env['CI_ADDED_AT'],
 }
 print(json.dumps(entry))
 ")

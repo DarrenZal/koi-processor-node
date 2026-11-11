@@ -25,12 +25,15 @@ FROM_FILE=""
 
 if [[ "${1:-}" == "--pubkey-only" ]]; then
     PUBKEY_ONLY=true
-    WG_PUBKEY="$2"
-    PEER_NUMBER="$3"
+    WG_PUBKEY="${2:-}"
+    PEER_NUMBER="${3:-}"
     RELAY_SSH="${4:-<relay-user>@203.0.113.13}"
     shift $((2 + ($# > 3 ? 2 : 1)))
     KOI_PUBKEY=""
     NODE_RID=""
+    # Checked before the registry lookup and the relay query use them.
+    validate_peer_number "$PEER_NUMBER"
+    validate_wg_pubkey "$WG_PUBKEY"
 
     # Look up peer_name from registry by peer_number
     PEER_ENTRY=$(peer_registry_lookup_by_number "$PEER_NUMBER" 2>/dev/null) || \
@@ -101,6 +104,9 @@ elif [[ "${1:-}" == "--from-file" ]]; then
     WG_PUBKEY=$(echo "$FIELDS" | grep '^wg_public_key=' | cut -d= -f2-)
     KOI_PUBKEY=$(echo "$FIELDS" | grep '^koi_public_key=' | cut -d= -f2-)
     NODE_RID=$(echo "$FIELDS" | grep '^node_rid=' | cut -d= -f2-)
+    # The joining peer wrote these, and they are stored and used later (remove-peer.sh revokes
+    # by node_rid), so they are checked here, before the registry entry is built or shown.
+    validate_join_identity "$NODE_RID" "$KOI_PUBKEY"
 else
     if [[ $# -lt 3 ]]; then
         echo "Usage: $0 [--dry-run] <peer-name> <peer-number> <wg-public-key> [relay-ssh]"
@@ -149,16 +155,20 @@ if $PUBKEY_ONLY; then
     fi
 else
     # Direct flow: create new active entry
-    REGISTRY_ENTRY=$(python3 -c "
-import json
+    # KOI_PUBKEY and NODE_RID come from the joining peer's join request (--from-file), so every
+    # value reaches Python through the environment, never pasted into its source.
+    REGISTRY_ENTRY=$(AP_PEER_NAME="$PEER_NAME" AP_PEER_NUMBER="$PEER_NUMBER" AP_PEER_IP="$PEER_IP" \
+        AP_WG_PUBKEY="$WG_PUBKEY" AP_KOI_PUBKEY="${KOI_PUBKEY:-}" AP_NODE_RID="${NODE_RID:-}" \
+        AP_ADDED_AT="$ADDED_AT" python3 -c "
+import json, os
 entry = {
-    'peer_name': '$PEER_NAME',
-    'peer_number': $PEER_NUMBER,
-    'wg_ip': '$PEER_IP',
-    'wg_pubkey': '$WG_PUBKEY',
-    'koi_pubkey': '${KOI_PUBKEY:-}',
-    'node_rid': '${NODE_RID:-}',
-    'added_at': '$ADDED_AT',
+    'peer_name': os.environ['AP_PEER_NAME'],
+    'peer_number': int(os.environ['AP_PEER_NUMBER']),
+    'wg_ip': os.environ['AP_PEER_IP'],
+    'wg_pubkey': os.environ['AP_WG_PUBKEY'],
+    'koi_pubkey': os.environ['AP_KOI_PUBKEY'],
+    'node_rid': os.environ['AP_NODE_RID'],
+    'added_at': os.environ['AP_ADDED_AT'],
     'status': 'active'
 }
 # Remove empty optional fields
@@ -196,10 +206,11 @@ fi
 if $PUBKEY_ONLY && ! $DRY_RUN; then
     peer_registry_update_status "$PEER_NAME" "active" "wg_pubkey" "$WG_PUBKEY"
     # Mark consumed via Python (update_status only handles one extra field)
-    python3 -c "
+    AP_PEER_REGISTRY="$PEER_REGISTRY" AP_PEER_NAME="$PEER_NAME" python3 -c "
 import json, os, fcntl
 
-registry = '$PEER_REGISTRY'
+registry = os.environ['AP_PEER_REGISTRY']
+peer_name = os.environ['AP_PEER_NAME']
 lockfile = registry + '.lock'
 
 with open(lockfile, 'w') as lf:
@@ -209,7 +220,7 @@ with open(lockfile, 'w') as lf:
     # Find the active entry (just set by peer_registry_update_status)
     # Iterate in reverse to pick the latest entry if duplicates exist
     for p in reversed(reg):
-        if p.get('peer_name') == '$PEER_NAME' and p.get('status') == 'active':
+        if p.get('peer_name') == peer_name and p.get('status') == 'active':
             p['consumed'] = True
             break
     tmp = registry + '.tmp.' + str(os.getpid())
@@ -259,9 +270,7 @@ fi
 log_info "Step 4: Generating WireGuard config template for peer..."
 
 INVITE_DIR="federation-invite-${PEER_NAME}"
-mkdir -p "$INVITE_DIR"
-
-cat > "$INVITE_DIR/wg-koi.conf" <<CONF
+TEMPLATE=$(cat <<CONF
 [Interface]
 Address = ${PEER_IP}/24
 PrivateKey = <PASTE_YOUR_PRIVATE_KEY_HERE>
@@ -272,6 +281,16 @@ Endpoint = ${RELAY_ENDPOINT}:51820
 AllowedIPs = 10.100.0.0/24
 PersistentKeepalive = 25
 CONF
+)
+
+if $DRY_RUN; then
+    # A dry run writes nothing: show the template instead.
+    echo "[DRY-RUN] Would write $INVITE_DIR/wg-koi.conf:"
+    printf '%s\n' "$TEMPLATE"
+else
+    mkdir -p "$INVITE_DIR"
+    printf '%s\n' "$TEMPLATE" > "$INVITE_DIR/wg-koi.conf"
+fi
 
 # ============================================
 # STEP 5: Print setup instructions

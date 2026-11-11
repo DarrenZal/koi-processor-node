@@ -64,18 +64,20 @@ fi
 
 if [[ -z "$PEER_INFO" ]]; then
     # Try database alias lookup
-    PEER_INFO=$(python3 -c "
-import json, psycopg2
-conn = psycopg2.connect('$POSTGRES_URL')
+    # Values reach Python through the environment, never pasted into its source.
+    PEER_INFO=$(RP_POSTGRES_URL="$POSTGRES_URL" RP_PEER_QUERY="$PEER_QUERY" python3 -c "
+import json, os, psycopg2
+query = os.environ['RP_PEER_QUERY']
+conn = psycopg2.connect(os.environ['RP_POSTGRES_URL'])
 cur = conn.cursor()
 # Try alias
-cur.execute('SELECT node_rid FROM koi_net_peer_aliases WHERE alias = %s', ('$PEER_QUERY',))
+cur.execute('SELECT node_rid FROM koi_net_peer_aliases WHERE alias = %s', (query,))
 row = cur.fetchone()
 if row:
     node_rid = row[0]
 else:
     # Try direct node_rid or node_name
-    cur.execute('SELECT node_rid, node_name, base_url, public_key FROM koi_net_nodes WHERE node_rid = %s OR node_name = %s', ('$PEER_QUERY', '$PEER_QUERY'))
+    cur.execute('SELECT node_rid, node_name, base_url, public_key FROM koi_net_nodes WHERE node_rid = %s OR node_name = %s', (query, query))
     row = cur.fetchone()
     if row:
         node_rid = row[0]
@@ -114,13 +116,17 @@ WG_PUBKEY=$(echo "$PEER_INFO" | python3 -c "import json,sys; print(json.load(sys
 
 log_info "Phase 1: Retracting shared documents..."
 
-RETRACTION_RESULT=$(python3 -c "
-import json, sys, uuid, psycopg2
+# NODE_RID comes from the registry (a joining peer's join request) or the database (a peer's own
+# handshake), so every value reaches Python through the environment, never pasted into its source.
+RETRACTION_RESULT=$(RP_POSTGRES_URL="$POSTGRES_URL" RP_NODE_RID="$NODE_RID" RP_DRY_RUN="$DRY_RUN" \
+    RP_KOI_NODE_NAME="$KOI_NODE_NAME" python3 -c "
+import json, os, sys, uuid, psycopg2
 from datetime import datetime, timezone
 
-pg_url = '$POSTGRES_URL'
-node_rid = '$NODE_RID'
-dry_run = $( $DRY_RUN && echo "True" || echo "False" )
+pg_url = os.environ['RP_POSTGRES_URL']
+node_rid = os.environ['RP_NODE_RID']
+dry_run = os.environ['RP_DRY_RUN'] == 'true'
+koi_node_name = os.environ['RP_KOI_NODE_NAME']
 
 conn = psycopg2.connect(pg_url)
 conn.autocommit = True
@@ -142,7 +148,7 @@ if not ledger_exists:
     cur.execute('''
         SELECT DISTINCT rid FROM koi_net_events
         WHERE source_node = %s AND target_node = %s AND event_type IN ('NEW', 'UPDATE')
-    ''', ('$KOI_NODE_NAME', node_rid))
+    ''', (koi_node_name, node_rid))
     shares = cur.fetchall()
 else:
     # Query outbound share ledger for un-retracted shares
@@ -171,7 +177,7 @@ for doc_rid in docs:
         cur.execute('''
             INSERT INTO koi_net_events (event_id, event_type, rid, source_node, target_node, manifest, contents)
             VALUES (%s, 'FORGET', %s, %s, %s, '{}'::jsonb, '{}'::jsonb)
-        ''', (event_id, doc_rid, '$KOI_NODE_NAME', node_rid))
+        ''', (event_id, doc_rid, koi_node_name, node_rid))
         retracted.append(doc_rid)
     except Exception as e:
         print(f'Failed to emit FORGET for {doc_rid}: {e}', file=sys.stderr)
@@ -207,10 +213,11 @@ log_info "Phase 2: Revoking KOI access..."
 if $DRY_RUN; then
     echo "[DRY-RUN] Would revoke edges, aliases, and node status for $NODE_RID"
 else
-    python3 -c "
-import psycopg2
+    RP_POSTGRES_URL="$POSTGRES_URL" RP_NODE_RID="$NODE_RID" python3 -c "
+import os, psycopg2
 
-conn = psycopg2.connect('$POSTGRES_URL')
+node_rid = os.environ['RP_NODE_RID']
+conn = psycopg2.connect(os.environ['RP_POSTGRES_URL'])
 conn.autocommit = True
 cur = conn.cursor()
 
@@ -218,19 +225,19 @@ cur = conn.cursor()
 cur.execute('''
     UPDATE koi_net_edges SET status = 'REVOKED', updated_at = NOW()
     WHERE source_node = %s OR target_node = %s
-''', ('$NODE_RID', '$NODE_RID'))
+''', (node_rid, node_rid))
 edges_revoked = cur.rowcount
 
 # Delete aliases
 cur.execute('''
     DELETE FROM koi_net_peer_aliases WHERE node_rid = %s
-''', ('$NODE_RID',))
+''', (node_rid,))
 aliases_deleted = cur.rowcount
 
 # Revoke node
 cur.execute('''
     UPDATE koi_net_nodes SET status = 'revoked' WHERE node_rid = %s
-''', ('$NODE_RID',))
+''', (node_rid,))
 
 conn.close()
 print(f'Edges revoked: {edges_revoked}')
@@ -245,11 +252,19 @@ fi
 
 log_info "Phase 3: Revoking WireGuard access..."
 
-if [[ -n "$WG_PUBKEY" ]]; then
+WG_STATE="removed from relay"
+if [[ -n "$WG_PUBKEY" ]] && ! is_wg_pubkey "$WG_PUBKEY"; then
+    # The registry's key is sent to the relay, where it runs as root: re-check it here, whatever
+    # approve-peer.sh checked when it was written. The rest of the removal goes ahead.
+    log_error "The peer registry's WireGuard key for $PEER_NAME is not a well-formed key; refusing to send it to the relay"
+    log_warn "Manually remove the peer from /etc/wireguard/wg-koi.conf on the relay"
+    WG_STATE="MANUAL removal needed (registry key refused)"
+elif [[ -n "$WG_PUBKEY" ]]; then
     relay_config_edit "$RELAY_SSH" remove-peer "$WG_PUBKEY"
 else
     log_warn "No WireGuard public key found in peer registry — skipping relay removal"
     log_warn "Manually remove the peer from /etc/wireguard/wg-koi.conf on the relay"
+    WG_STATE="MANUAL removal needed"
 fi
 
 # ============================================
@@ -278,10 +293,13 @@ echo "  Documents retracted: $RETRACT_COUNT"
 echo "  KOI edges:       revoked"
 echo "  KOI aliases:     deleted"
 echo "  KOI node status: revoked"
-echo "  WireGuard:       $(if [[ -n "$WG_PUBKEY" ]]; then echo 'removed from relay'; else echo 'MANUAL removal needed'; fi)"
+echo "  WireGuard:       $WG_STATE"
 echo "  Peer registry:   $(if $DRY_RUN; then echo 'would update to removed'; else echo 'updated to removed'; fi)"
 echo ""
 if $DRY_RUN; then
     echo "  (DRY RUN — no changes were made)"
 fi
 echo "==================================="
+
+# A refused registry key leaves the peer's relay access in place: say so in the exit status.
+[[ "$WG_STATE" != *"key refused"* ]] || exit 1

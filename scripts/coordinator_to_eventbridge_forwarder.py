@@ -24,6 +24,13 @@ import time
 from dotenv import load_dotenv
 
 from koi_envelope import load_private_key_from_env, sign_envelope
+from forwarder_delivery import (
+    Disposition,
+    classify_delivery,
+    write_dead_letter,
+    backoff_delay,
+    max_retries,
+)
 
 # Load environment variables
 load_dotenv()
@@ -42,6 +49,11 @@ NODE_ID = os.getenv("NODE_ID", "event-bridge-forwarder")
 COORDINATOR_NODE_ID = os.getenv("COORDINATOR_NODE_ID")
 MAX_CONCURRENT = int(os.getenv("MAX_CONCURRENT", "10"))
 HEALTH_CHECK_INTERVAL = int(os.getenv("HEALTH_CHECK_INTERVAL", "300"))  # 5 minutes
+
+# Service key sent to the configured internal targets (event bridge, code graph,
+# coordinator). Set as a default header on the client below, so it only reaches
+# the env-configured URLs this forwarder talks to.
+SERVICE_KEY = os.getenv("KOI_SERVICE_KEY")
 
 # Envelope signing
 ENVELOPE_PRIVATE_KEY = load_private_key_from_env()
@@ -99,7 +111,8 @@ async def startup_health_checks(client: httpx.AsyncClient) -> bool:
 async def forward_events():
     """Poll coordinator for events and forward to Event Bridge"""
 
-    async with httpx.AsyncClient(timeout=30.0) as client:
+    default_headers = {"X-KOI-Service-Key": SERVICE_KEY} if SERVICE_KEY else {}
+    async with httpx.AsyncClient(timeout=30.0, headers=default_headers) as client:
         # Log configuration
         logger.info("=" * 60)
         logger.info("KOI Event Forwarder Configuration:")
@@ -128,11 +141,137 @@ async def forward_events():
                 last_health_check = time.time()
 
 
+def normalize_event(event):
+    """Normalize a coordinator event into the bridge's expected shape."""
+    if "bundle" in event:
+        return event
+
+    manifest = event.get("manifest") or {}
+    contents = event.get("contents") or {}
+    content_hash = manifest.get("sha256_hash") or manifest.get("content_hash")
+    if not content_hash:
+        content_hash = hashlib.sha256(json.dumps(contents, sort_keys=True).encode()).hexdigest()
+
+    bundle = {
+        "rid": event.get("rid"),
+        "manifest": {
+            "rid": event.get("rid"),
+            "timestamp": manifest.get("timestamp") or event.get("timestamp") or datetime.now().isoformat(),
+            "content_hash": content_hash,
+            "size_bytes": manifest.get("size_bytes") or len(json.dumps(contents).encode()),
+            "content_type": manifest.get("content_type") or "application/json",
+            "version": manifest.get("version") or "1.0",
+            "metadata": manifest.get("metadata") or {}
+        },
+        "contents": contents
+    }
+    return {
+        "event_type": event.get("event_type"),
+        "rid": event.get("rid"),
+        "source_node": event.get("source_node", "coordinator"),
+        "timestamp": event.get("timestamp") or datetime.now().isoformat(),
+        "bundle": bundle
+    }
+
+
+async def _forward_one(client, event):
+    """Forward one normalized event to the bridge (and, best-effort, the code
+    graph). Returns (Disposition, detail)."""
+    eb_task = client.post(f"{EVENT_BRIDGE_URL}{EVENT_BRIDGE_ENDPOINT}", json=event)
+    cg_task = client.post(f"{CODE_GRAPH_URL}{CODE_GRAPH_ENDPOINT}", json=event)
+    eb_response, cg_response = await asyncio.gather(eb_task, cg_task, return_exceptions=True)
+
+    # Code graph is best effort: never blocks delivery or confirmation.
+    if isinstance(cg_response, Exception):
+        logger.debug(f"Code Graph connection error: {cg_response}")
+    elif getattr(cg_response, "status_code", None) != 200:
+        logger.debug(f"Code Graph error {getattr(cg_response, 'status_code', '?')}")
+
+    if isinstance(eb_response, Exception):
+        return classify_delivery(None, None), f"connection error: {eb_response}"
+
+    status = eb_response.status_code
+    body_success = None
+    detail = f"HTTP {status}"
+    if status == 200:
+        try:
+            eb_payload = eb_response.json()
+            body_success = bool(eb_payload.get("success", False))
+            if not body_success:
+                detail = eb_payload.get("error") or "HTTP 200: success=false"
+        except Exception as e:
+            body_success = False
+            detail = f"non-JSON response (HTTP {status}): {e}"
+    return classify_delivery(status, body_success), detail
+
+
+async def _forward_batch(client, pending):
+    """Forward a list of (event, event_id). Returns (confirm_ids, retryable).
+
+    Dead-lettered events are written out and added to confirm_ids so the
+    coordinator stops redelivering them. Retryable events are returned to be
+    retried without polling again.
+    """
+    results = await asyncio.gather(*[
+        _forward_one(client, normalize_event(ev)) for ev, _ in pending
+    ])
+    confirm_ids = []
+    retryable = []
+    for (ev, event_id), (disposition, detail) in zip(pending, results):
+        rid = ev.get("rid", "unknown")
+        if disposition == Disposition.CONFIRM:
+            logger.info(f"Delivered event: {rid}")
+            if event_id is not None:
+                confirm_ids.append(event_id)
+        elif disposition == Disposition.DEAD_LETTER:
+            path = write_dead_letter(ev, event_id, detail)
+            logger.error(f"Dead-lettered event {rid} ({detail}) -> {path}")
+            if event_id is not None:
+                confirm_ids.append(event_id)
+        else:  # RETRY
+            logger.warning(f"Transient failure for event {rid}: {detail}")
+            retryable.append((ev, event_id))
+    return confirm_ids, retryable
+
+
+async def _confirm(client, event_ids) -> int:
+    """Confirm delivery of the given event ids. Returns the confirmed count."""
+    if not event_ids:
+        return 0
+    try:
+        confirm_payload = {
+            "node_id": NODE_ID,
+            "event_ids": event_ids,
+            "timestamp": datetime.now().isoformat()
+        }
+        if ENVELOPE_SIGN:
+            target_node = COORDINATOR_NODE_ID or "coordinator"
+            confirm_payload = sign_envelope(confirm_payload, NODE_ID, target_node, ENVELOPE_PRIVATE_KEY)
+
+        confirm_response = await client.post(
+            f"{COORDINATOR_URL}/events/confirm",
+            json=confirm_payload
+        )
+        if confirm_response.status_code == 200:
+            confirm_data = confirm_response.json()
+            if isinstance(confirm_data, dict) and "payload" in confirm_data:
+                confirm_data = confirm_data["payload"]
+            count = int(confirm_data.get("confirmed_count", 0))
+            logger.info(f"Confirmed delivery of {count} events")
+            return count
+        logger.error(f"Failed to confirm delivery: {confirm_response.status_code}")
+    except Exception as e:
+        logger.error(f"Error confirming delivery: {e}")
+    return 0
+
+
 async def poll_once(client: httpx.AsyncClient) -> int:
-    """Run a single poll/forward/confirm cycle. Returns confirmed event count."""
+    """Poll once, forward the batch, and retry transient failures with backoff
+    WITHOUT polling again, so an outage, a 5xx or a missing/rejected key never
+    silently drops events. Permanent client errors (400/422) are dead-lettered
+    and confirmed. Returns the confirmed event count."""
     confirmed_count = 0
     try:
-        # Poll coordinator for events (KOI-net POST)
         poll_payload = {
             "type": "poll_events",
             "limit": MAX_CONCURRENT,
@@ -150,8 +289,6 @@ async def poll_once(client: httpx.AsyncClient) -> int:
 
         if response.status_code == 200:
             poll_response = response.json()
-
-            # Extract events and event IDs from KOI-net payload (or envelope)
             if isinstance(poll_response, dict) and "payload" in poll_response:
                 poll_response = poll_response["payload"]
 
@@ -160,120 +297,48 @@ async def poll_once(client: httpx.AsyncClient) -> int:
 
             if events:
                 logger.info(f"Received {len(events)} events from coordinator")
+                pending = [
+                    (events[i], event_ids[i] if i < len(event_ids) else None)
+                    for i in range(len(events))
+                ]
+                attempt = 0
+                max_attempts = max_retries()
+                while True:
+                    confirm_ids, retryable = await _forward_batch(client, pending)
+                    confirmed_count += await _confirm(client, confirm_ids)
+                    if not retryable:
+                        pending = []
+                        break
+                    if attempt >= max_attempts:
+                        pending = retryable  # exhausted; dead-letter below
+                        break
+                    delay = backoff_delay(attempt)
+                    logger.critical(
+                        "Forwarder: %d event(s) undelivered (transient). Holding the "
+                        "batch and retrying in %.1fs without polling (attempt %d/%d).",
+                        len(retryable), delay, attempt + 1, max_attempts,
+                    )
+                    await asyncio.sleep(delay)
+                    attempt += 1
+                    pending = retryable
 
-                # Track successfully processed events for confirmation
-                successfully_processed = []
-
-                # Forward events in PARALLEL using asyncio.gather (MAJOR SPEEDUP!)
-                def normalize_event(event):
-                    if "bundle" in event:
-                        return event
-
-                    manifest = event.get("manifest") or {}
-                    contents = event.get("contents") or {}
-                    content_hash = manifest.get("sha256_hash") or manifest.get("content_hash")
-                    if not content_hash:
-                        content_hash = hashlib.sha256(json.dumps(contents, sort_keys=True).encode()).hexdigest()
-
-                    bundle = {
-                        "rid": event.get("rid"),
-                        "manifest": {
-                            "rid": event.get("rid"),
-                            "timestamp": manifest.get("timestamp") or event.get("timestamp") or datetime.now().isoformat(),
-                            "content_hash": content_hash,
-                            "size_bytes": manifest.get("size_bytes") or len(json.dumps(contents).encode()),
-                            "content_type": manifest.get("content_type") or "application/json",
-                            "version": manifest.get("version") or "1.0",
-                            "metadata": manifest.get("metadata") or {}
-                        },
-                        "contents": contents
-                    }
-                    return {
-                        "event_type": event.get("event_type"),
-                        "rid": event.get("rid"),
-                        "source_node": event.get("source_node", "coordinator"),
-                        "timestamp": event.get("timestamp") or datetime.now().isoformat(),
-                        "bundle": bundle
-                    }
-
-                async def forward_single_event(event, event_id):
-                    try:
-                        event = normalize_event(event)
-                        # Send to both Event Bridge AND Code Graph Service in parallel
-                        eb_task = client.post(f"{EVENT_BRIDGE_URL}{EVENT_BRIDGE_ENDPOINT}", json=event)
-                        cg_task = client.post(f"{CODE_GRAPH_URL}{CODE_GRAPH_ENDPOINT}", json=event)
-                        
-                        eb_response, cg_response = await asyncio.gather(eb_task, cg_task, return_exceptions=True)
-                        
-                        # Check Event Bridge response (require explicit success from body)
-                        eb_success = False
-                        eb_error = None
-                        if isinstance(eb_response, Exception):
-                            eb_error = f"{eb_response}"
-                        else:
-                            try:
-                                eb_payload = eb_response.json()
-                            except Exception as e:
-                                eb_error = f"non-JSON response (HTTP {eb_response.status_code}): {e}"
-                            else:
-                                # Bridges now return 200 on success, 500 on failure
-                                eb_success = bool(eb_payload.get("success", False))
-                                if not eb_success:
-                                    eb_error = eb_payload.get("error") or f"HTTP {eb_response.status_code}: success=false"
-                        
-                        # Check Code Graph response (allow it to fail silently if not a code file)
-                        if isinstance(cg_response, Exception):
-                            logger.debug(f"Code Graph Service connection error: {cg_response}")
-                        elif cg_response.status_code != 200:
-                            logger.debug(f"Code Graph Service error {cg_response.status_code}: {cg_response.text[:100]}")
-                        
-                        if eb_success:
-                            logger.info(f"Successfully forwarded event: {event.get('rid', 'unknown')}")
-                            return event_id
-                        else:
-                            logger.error(f"Event Bridge error: {eb_error}")
-                            return None
-                    except Exception as e:
-                        logger.error(f"Error forwarding event: {e}")
-                        return None
-
-                # Send all events in parallel
-                results = await asyncio.gather(*[
-                    forward_single_event(event, event_ids[i] if i < len(event_ids) else None)
-                    for i, event in enumerate(events)
-                ])
-
-                # Collect successfully processed event IDs
-                successfully_processed = [r for r in results if r is not None]
-
-                # Confirm delivery for successfully processed events
-                if successfully_processed:
-                    try:
-                        confirm_payload = {
-                            "node_id": NODE_ID,
-                            "event_ids": successfully_processed,
-                            "timestamp": datetime.now().isoformat()
-                        }
-                        if ENVELOPE_SIGN:
-                            target_node = COORDINATOR_NODE_ID or "coordinator"
-                            confirm_payload = sign_envelope(confirm_payload, NODE_ID, target_node, ENVELOPE_PRIVATE_KEY)
-
-                        confirm_response = await client.post(
-                            f"{COORDINATOR_URL}/events/confirm",
-                            json=confirm_payload
+                if pending:
+                    # Retries exhausted. Dead-letter (preserve) and confirm, so one
+                    # persistent condition - a wrong key, a deterministic 500 - cannot
+                    # wedge the whole pipeline forever. Still never a silent drop: each
+                    # is logged CRITICAL and written to the dead-letter JSONL.
+                    exhausted_ids = []
+                    for ev, event_id in pending:
+                        path = write_dead_letter(
+                            ev, event_id, f"retry attempts exhausted ({max_attempts})"
                         )
-
-                        if confirm_response.status_code == 200:
-                            confirm_data = confirm_response.json()
-                            if isinstance(confirm_data, dict) and "payload" in confirm_data:
-                                confirm_data = confirm_data["payload"]
-                            confirmed_count = int(confirm_data.get("confirmed_count", 0))
-                            logger.info(f"Confirmed delivery of {confirmed_count} events")
-                        else:
-                            logger.error(f"Failed to confirm delivery: {confirm_response.status_code}")
-
-                    except Exception as e:
-                        logger.error(f"Error confirming delivery: {e}")
+                        logger.critical(
+                            "Forwarder: dead-lettered %s after %d attempts -> %s",
+                            ev.get("rid", "unknown"), max_attempts, path,
+                        )
+                        if event_id is not None:
+                            exhausted_ids.append(event_id)
+                    confirmed_count += await _confirm(client, exhausted_ids)
 
         elif response.status_code == 404:
             logger.debug("No events available")

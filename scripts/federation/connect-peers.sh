@@ -115,6 +115,13 @@ if [[ -z "$REMOTE_RID" ]]; then
     log_fatal "Could not extract node_rid from remote health response"
 fi
 
+# REMOTE_RID comes from the remote's /health, so it is untrusted. Accept only the node RID
+# shape (name, then a 16- or 64-character hex hash) before it reaches any command or query.
+NODE_RID_RE='^orn:koi-net\.node:[A-Za-z0-9._-]+\+[0-9a-fA-F]{16,64}$'
+if [[ ! "$REMOTE_RID" =~ $NODE_RID_RE ]]; then
+    log_fatal "Refusing: the remote node_rid is not a well-formed node RID"
+fi
+
 log_info "Remote node: $REMOTE_NAME ($REMOTE_RID)"
 
 # ============================================
@@ -186,13 +193,17 @@ print(json.dumps(p))
 ")
 
 # Send our profile to remote (HandshakeRequest requires type + profile)
-HANDSHAKE_RESPONSE=$(curl -sf -X POST \
+HANDSHAKE_STATUS=$(curl -s -o /dev/null -w '%{http_code}' -X POST \
     -H "Content-Type: application/json" \
     -d "{\"type\": \"handshake\", \"profile\": $LOCAL_PROFILE}" \
     "${PEER_URL}/koi-net/handshake" 2>/dev/null) || \
     log_fatal "Handshake to remote peer failed"
 
-log_info "Local → Remote handshake: sent"
+case "$HANDSHAKE_STATUS" in
+    2*) log_info "Local → Remote handshake: sent" ;;
+    401) log_warn "The remote already knows this node and declined the changed profile. Its operator runs this script on their side to update it." ;;
+    *) log_fatal "Handshake to remote peer failed (HTTP $HANDSHAKE_STATUS)" ;;
+esac
 
 # ============================================
 # STEP 6: Remote → Local handshake
@@ -200,8 +211,15 @@ log_info "Local → Remote handshake: sent"
 
 log_info "Step 6: Registering remote peer locally..."
 
-# Send remote profile to our local node (HandshakeRequest requires type + profile)
+# Send remote profile to our local node (HandshakeRequest requires type + profile).
+# This is the local operator's registration, so it carries the admin token when one is set.
+LOCAL_ADMIN_TOKEN="${KOI_ADMIN_TOKEN:-}"
+LOCAL_TOKEN_FILE="${KOI_STATE_DIR:-$HOME/.config/personal-koi/koi-state}/admin_token"
+if [[ -z "$LOCAL_ADMIN_TOKEN" && -f "$LOCAL_TOKEN_FILE" ]]; then
+    LOCAL_ADMIN_TOKEN=$(cat "$LOCAL_TOKEN_FILE")
+fi
 LOCAL_HS_RESPONSE=$(curl -sf -X POST \
+    -H @<(printf 'Authorization: Bearer %s\n' "$LOCAL_ADMIN_TOKEN") \
     -H "Content-Type: application/json" \
     -d "{\"type\": \"handshake\", \"profile\": $REMOTE_PROFILE}" \
     "${LOCAL_URL}/koi-net/handshake" 2>/dev/null) || \
@@ -233,7 +251,9 @@ if [[ "$approve_outbound" == "y" || "$approve_outbound" == "Y" ]]; then
 
     # Look up the outbound edge_rid from the database
     LOCAL_NODE_RID=$(echo "$LOCAL_PROFILE" | python3 -c "import json,sys; print(json.load(sys.stdin).get('node_rid',''))")
-    OUTBOUND_EDGE_RID=$(python3 -c "
+    # Values reach Python through the environment, never pasted into its source: REMOTE_RID
+    # comes from the remote's /health, so pasting it would let that node run code here.
+    OUTBOUND_EDGE_RID=$(CP_LOCAL_NODE_RID="$LOCAL_NODE_RID" CP_REMOTE_RID="$REMOTE_RID" python3 -c "
 import psycopg2, os
 pg_url = os.environ.get('POSTGRES_URL', 'postgresql:///personal_koi')
 conn = psycopg2.connect(pg_url)
@@ -242,7 +262,7 @@ cur.execute('''
     SELECT edge_rid FROM koi_net_edges
     WHERE source_node = %s AND target_node = %s AND status = 'PROPOSED'
     ORDER BY created_at DESC LIMIT 1
-''', ('$LOCAL_NODE_RID', '$REMOTE_RID'))
+''', (os.environ['CP_LOCAL_NODE_RID'], os.environ['CP_REMOTE_RID']))
 row = cur.fetchone()
 conn.close()
 print(row[0] if row else '')
@@ -255,7 +275,7 @@ print(row[0] if row else '')
         # Approve via edge_rid (API requires edge_rid, not target_node)
         APPROVE_RESULT=$(curl -sf -X POST \
             -H "Content-Type: application/json" \
-            -H "Authorization: Bearer $ADMIN_TOKEN" \
+            -H @<(printf 'Authorization: Bearer %s\n' "$ADMIN_TOKEN") \
             -d "{\"edge_rid\": \"$OUTBOUND_EDGE_RID\"}" \
             "${LOCAL_URL}/koi-net/edges/approve" 2>/dev/null)
 
@@ -284,7 +304,7 @@ if [[ -n "$PEER_ALIAS" ]]; then
         ADMIN_TOKEN=$(cat "$ADMIN_TOKEN_FILE")
 
         # Insert alias via the API or directly
-        python3 -c "
+        CP_PEER_ALIAS="$PEER_ALIAS" CP_REMOTE_RID="$REMOTE_RID" python3 -c "
 import psycopg2, os
 pg_url = os.environ.get('POSTGRES_URL', 'postgresql:///personal_koi')
 conn = psycopg2.connect(pg_url)
@@ -294,7 +314,7 @@ cur.execute('''
     INSERT INTO koi_net_peer_aliases (alias, node_rid)
     VALUES (%s, %s)
     ON CONFLICT (alias) DO UPDATE SET node_rid = EXCLUDED.node_rid
-''', ('$PEER_ALIAS', '$REMOTE_RID'))
+''', (os.environ['CP_PEER_ALIAS'], os.environ['CP_REMOTE_RID']))
 conn.close()
 print('Alias registered')
 " 2>/dev/null || log_warn "Failed to register alias (psycopg2 may not be available)"
@@ -333,9 +353,13 @@ echo ""
 echo "  Local -> Remote handshake:  $(if true; then echo 'sent'; fi)"
 echo "  Remote -> Local handshake:  registered"
 
-# Check local inbound edge status
-INBOUND_STATUS="APPROVED (auto)"
+# Local inbound edge status, as the local handshake reported it (stored, not assumed): a new
+# inbound edge stays PROPOSED until the operator approves it.
+INBOUND_STATUS=$(echo "$LOCAL_HS_RESPONSE" | python3 -c "import json,sys; print(json.load(sys.stdin).get('edge_status') or 'UNKNOWN')" 2>/dev/null || echo "UNKNOWN")
 echo "  Local inbound edge:         $INBOUND_STATUS"
+if [[ "$INBOUND_STATUS" == "PROPOSED" ]]; then
+    echo "    (approve it with POST ${LOCAL_URL}/koi-net/edges/approve before this node polls the peer)"
+fi
 echo "  Local outbound edge:        $OUTBOUND_STATUS"
 echo "  Remote outbound edge:       ? UNKNOWN (peer must approve on their side)"
 
@@ -378,7 +402,7 @@ if [[ -n "$PEER_ALIAS" ]]; then
         if [[ -n "$ADMIN_TOKEN" ]]; then
             echo "Configuring vault sync with $PEER_ALIAS (folder: $SHARED_FOLDER)..."
             curl -sf -X POST "${LOCAL_URL}/koi-net/vault-sync/configure" \
-                -H "Authorization: Bearer $ADMIN_TOKEN" \
+                -H @<(printf 'Authorization: Bearer %s\n' "$ADMIN_TOKEN") \
                 -H "Content-Type: application/json" \
                 -d "{\"peer\": \"$PEER_ALIAS\", \"shared_folder\": \"$SHARED_FOLDER\"}" \
                 && echo "  Vault sync configured." \

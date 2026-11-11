@@ -560,32 +560,7 @@ fi
 
 log_info "Step 10: Verifying KOI key continuity..."
 
-KEY_INFO=$(KOI_STATE_DIR="$KOI_STATE" python3 -c "
-import sys, os, json
-sys.path.insert(0, '$KOI_PATH')
-os.environ['KOI_STATE_DIR'] = '$KOI_STATE'
-
-from api.node_identity import load_or_create_identity, get_public_key_der_b64
-from base64 import b64encode, b64decode
-import hashlib
-
-# load_or_create_identity may return (private_key, profile) or
-# (private_key, profile, encryption_private_key) depending on version.
-identity = load_or_create_identity('$NODE_NAME')
-if not isinstance(identity, tuple) or len(identity) < 2:
-    raise RuntimeError(f'Unexpected identity return shape: {type(identity)}')
-private_key, profile = identity[0], identity[1]
-koi_pubkey = get_public_key_der_b64(private_key)
-
-# Compute fingerprint: SHA256 of the actual DER bytes (not the base64 text)
-der_bytes = b64decode(koi_pubkey)
-fp_hash = hashlib.sha256(der_bytes).digest()
-fingerprint = 'SHA256:' + b64encode(fp_hash).decode().rstrip('=')
-
-print(f'node_rid={profile.node_rid}')
-print(f'koi_public_key={koi_pubkey}')
-print(f'fingerprint={fingerprint}')
-")
+KEY_INFO=$(koi_node_identity "$KOI_PATH" "$KOI_STATE" "$NODE_NAME")
 
 LOADED_RID=$(echo "$KEY_INFO" | grep '^node_rid=' | cut -d= -f2-)
 LOADED_PUBKEY=$(echo "$KEY_INFO" | grep '^koi_public_key=' | cut -d= -f2-)

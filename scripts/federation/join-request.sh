@@ -106,24 +106,7 @@ fi
 KOI_KEY_FILE="$KOI_STATE/${PEER_NAME}_private_key.pem"
 
 # Use the koi-processor's node_identity module
-KOI_IDENTITY=$(KOI_STATE_DIR="$KOI_STATE" python3 -c "
-import sys, os
-sys.path.insert(0, '$KOI_PROCESSOR_DIR')
-os.environ['KOI_STATE_DIR'] = '$KOI_STATE'
-
-from api.node_identity import load_or_create_identity, get_public_key_der_b64
-
-# load_or_create_identity may return (private_key, profile) or
-# (private_key, profile, encryption_private_key) depending on version.
-identity = load_or_create_identity('$PEER_NAME')
-if not isinstance(identity, tuple) or len(identity) < 2:
-    raise RuntimeError(f'Unexpected identity return shape: {type(identity)}')
-private_key, profile = identity[0], identity[1]
-koi_pubkey = get_public_key_der_b64(private_key)
-
-print(f'node_rid={profile.node_rid}')
-print(f'koi_public_key={koi_pubkey}')
-")
+KOI_IDENTITY=$(koi_node_identity "$KOI_PROCESSOR_DIR" "$KOI_STATE" "$PEER_NAME")
 
 NODE_RID=$(echo "$KOI_IDENTITY" | grep '^node_rid=' | cut -d= -f2-)
 KOI_PUBKEY=$(echo "$KOI_IDENTITY" | grep '^koi_public_key=' | cut -d= -f2-)

@@ -21,18 +21,20 @@ HEALTH=$(curl -sf "http://127.0.0.1:${KOI_PORT}/koi-net/health") || \
     log_fatal "Cannot reach local KOI-net API"
 LOCAL_PUBKEY=$(echo "$HEALTH" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('node', d.get('profile', {}))['public_key'])")
 
-# Get peer's KOI public key from DB
-PEER_PUBKEY=$(psql -d personal_koi -Atc "
-    SELECT public_key FROM koi_net_nodes
-    WHERE node_rid IN (
-        SELECT node_rid FROM koi_net_peer_aliases WHERE alias = lower('$PEER_ID')
-        UNION
-        SELECT node_rid FROM koi_net_nodes WHERE lower(node_name) = lower('$PEER_ID')
-        UNION
-        SELECT '$PEER_ID' WHERE '$PEER_ID' LIKE 'orn:koi-net.node:%'
-    )
-    LIMIT 1
-") || log_fatal "Cannot find peer '$PEER_ID' in database"
+# Get peer's KOI public key from DB. The peer id reaches SQL as a psql variable (:'id', quoted
+# by psql), never pasted into the query.
+PEER_PUBKEY=$(psql -d personal_koi -At -v id="$PEER_ID" -v ON_ERROR_STOP=1 <<'SQL'
+SELECT public_key FROM koi_net_nodes
+WHERE node_rid IN (
+    SELECT node_rid FROM koi_net_peer_aliases WHERE alias = lower(:'id')
+    UNION
+    SELECT node_rid FROM koi_net_nodes WHERE lower(node_name) = lower(:'id')
+    UNION
+    SELECT :'id' WHERE :'id' LIKE 'orn:koi-net.node:%'
+)
+LIMIT 1
+SQL
+) || log_fatal "Cannot find peer '$PEER_ID' in database"
 
 if [[ -z "$PEER_PUBKEY" ]]; then
     log_fatal "Peer '$PEER_ID' has no public key in database (handshake not completed yet?)"

@@ -77,9 +77,11 @@ class ProvenanceToRDF:
             bool: True if successful
         """
         try:
-            # Create RDF triples for document provenance
-            doc_uri = f"<doc:{quote(rid)}>"
-            sensor_uri = f"<sensor:{sensor_id}>"
+            # Create RDF triples for document provenance. Every IRI segment is
+            # percent-encoded and every literal is escaped, so no input can break
+            # out of its term.
+            doc_uri = f"<doc:{self._escape_iri(rid)}>"
+            sensor_uri = f"<sensor:{self._escape_iri(sensor_id)}>"
 
             # Build INSERT DATA query
             insert_query = f"""
@@ -87,10 +89,10 @@ class ProvenanceToRDF:
 
             INSERT DATA {{
                 {doc_uri} a koi:Document ;
-                    koi:rid "{rid}" ;
+                    koi:rid "{self._escape_literal(rid)}" ;
                     koi:sensedBy {sensor_uri} ;
-                    koi:eventType "{event_type}" ;
-                    koi:timestamp "{timestamp}"^^xsd:dateTime .
+                    koi:eventType "{self._escape_literal(event_type)}" ;
+                    koi:timestamp "{self._escape_literal(timestamp)}"^^xsd:dateTime .
             """
 
             # Add optional properties
@@ -98,21 +100,21 @@ class ProvenanceToRDF:
                 insert_query += f'\n    {doc_uri} rdfs:label "{self._escape_literal(title)}" .'
 
             if content_hash:
-                insert_query += f'\n    {doc_uri} koi:contentHash "{content_hash}" .'
+                insert_query += f'\n    {doc_uri} koi:contentHash "{self._escape_literal(content_hash)}" .'
 
             if cat_receipt_id:
-                insert_query += f'\n    {doc_uri} prov:wasGeneratedBy <cat:{cat_receipt_id}> .'
+                insert_query += f'\n    {doc_uri} prov:wasGeneratedBy <cat:{self._escape_iri(cat_receipt_id)}> .'
 
             # Add processor relationships
             if processors:
                 for processor in processors:
-                    proc_uri = f"<infra:{processor}>"
+                    proc_uri = f"<infra:{self._escape_iri(processor)}>"
                     insert_query += f'\n    {doc_uri} koi:processedBy {proc_uri} .'
 
             # Add storage relationships
             if storage_locations:
                 for storage in storage_locations:
-                    storage_uri = f"<infra:{storage}>"
+                    storage_uri = f"<infra:{self._escape_iri(storage)}>"
                     insert_query += f'\n    {doc_uri} koi:storedIn {storage_uri} .'
 
             insert_query += "\n}"
@@ -160,20 +162,21 @@ class ProvenanceToRDF:
             bool: True if successful
         """
         try:
-            cat_uri = f"<cat:{cat_id}>"
-            input_uri = f"<doc:{quote(input_rid)}>"
-            output_uri = f"<doc:{quote(output_rid)}>"
+            cat_uri = f"<cat:{self._escape_iri(cat_id)}>"
+            input_uri = f"<doc:{self._escape_iri(input_rid)}>"
+            output_uri = f"<doc:{self._escape_iri(output_rid)}>"
+            label = self._escape_literal(f"CAT Transformation: {transformation_type}")
 
             insert_query = f"""
             {self.prefixes}
 
             INSERT DATA {{
                 {cat_uri} a prov:Activity ;
-                    rdfs:label "CAT Transformation: {transformation_type}" ;
+                    rdfs:label "{label}" ;
                     prov:used {input_uri} ;
                     prov:generated {output_uri} ;
-                    prov:startedAtTime "{timestamp}"^^xsd:dateTime ;
-                    koi:transformationType "{transformation_type}" .
+                    prov:startedAtTime "{self._escape_literal(timestamp)}"^^xsd:dateTime ;
+                    koi:transformationType "{self._escape_literal(transformation_type)}" .
 
                 {output_uri} prov:wasDerivedFrom {input_uri} ;
                     prov:wasGeneratedBy {cat_uri} .
@@ -209,18 +212,19 @@ class ProvenanceToRDF:
             Dict with provenance information or None
         """
         try:
+            doc_iri = f"<doc:{self._escape_iri(rid)}>"
             query = f"""
             {self.prefixes}
 
             SELECT ?sensor ?processor ?storage ?timestamp ?eventType ?catReceipt
             WHERE {{
-                <doc:{quote(rid)}> koi:rid "{rid}" .
-                OPTIONAL {{ <doc:{quote(rid)}> koi:sensedBy ?sensor }}
-                OPTIONAL {{ <doc:{quote(rid)}> koi:processedBy ?processor }}
-                OPTIONAL {{ <doc:{quote(rid)}> koi:storedIn ?storage }}
-                OPTIONAL {{ <doc:{quote(rid)}> koi:timestamp ?timestamp }}
-                OPTIONAL {{ <doc:{quote(rid)}> koi:eventType ?eventType }}
-                OPTIONAL {{ <doc:{quote(rid)}> prov:wasGeneratedBy ?catReceipt }}
+                {doc_iri} koi:rid "{self._escape_literal(rid)}" .
+                OPTIONAL {{ {doc_iri} koi:sensedBy ?sensor }}
+                OPTIONAL {{ {doc_iri} koi:processedBy ?processor }}
+                OPTIONAL {{ {doc_iri} koi:storedIn ?storage }}
+                OPTIONAL {{ {doc_iri} koi:timestamp ?timestamp }}
+                OPTIONAL {{ {doc_iri} koi:eventType ?eventType }}
+                OPTIONAL {{ {doc_iri} prov:wasGeneratedBy ?catReceipt }}
             }}
             """
 
@@ -257,11 +261,41 @@ class ProvenanceToRDF:
             logger.error(f"Error querying provenance: {e}")
             return None
 
-    def _escape_literal(self, text: str) -> str:
-        """Escape text for RDF literals"""
-        if text:
-            return text.replace('"', '\\"').replace('\n', '\\n').replace('\r', '\\r')
-        return ""
+    def _escape_literal(self, text) -> str:
+        """Escape a value for a SPARQL/Turtle double-quoted string literal.
+
+        Backslash is escaped first (so an input backslash cannot form a spurious
+        escape), then the quote, newline, carriage return and tab. Any remaining
+        control character (U+0000-U+001F and U+007F) is emitted as a \\uXXXX
+        escape. This makes every interpolated literal injection-safe, whatever
+        the input contains.
+        """
+        if text is None:
+            return ""
+        out = []
+        for ch in str(text):
+            if ch == "\\":
+                out.append("\\\\")
+            elif ch == '"':
+                out.append('\\"')
+            elif ch == "\n":
+                out.append("\\n")
+            elif ch == "\r":
+                out.append("\\r")
+            elif ch == "\t":
+                out.append("\\t")
+            elif ord(ch) < 0x20 or ord(ch) == 0x7F:
+                out.append("\\u%04X" % ord(ch))
+            else:
+                out.append(ch)
+        return "".join(out)
+
+    def _escape_iri(self, value) -> str:
+        """Percent-encode a value so it is safe as a single IRI segment inside
+        angle brackets. Nothing is left unescaped except RFC 3986 unreserved
+        characters, so '/', '>', whitespace and control characters cannot break
+        out of the ``<prefix:...>`` term."""
+        return quote(str(value), safe="")
 
     async def check_fuseki_connection(self) -> bool:
         """Check if Fuseki is accessible"""
