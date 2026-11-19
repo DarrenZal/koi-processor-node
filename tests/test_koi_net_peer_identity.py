@@ -54,7 +54,8 @@ async def node(monkeypatch):
     monkeypatch.setattr(knr, "_node_profile", profile)
     monkeypatch.setattr(knr, "_event_queue", EventQueue(pool, me.rid))
     monkeypatch.setattr(knr, "_vault_sync", None)
-    for var in ("KOI_STRICT_MODE", "KOI_NET_DEFER_UNKNOWN_HANDSHAKE", "KOI_REQUIRE_SIGNED_ENVELOPES", "KOI_ADMIN_TOKEN"):
+    for var in ("KOI_STRICT_MODE", "KOI_NET_DEFER_UNKNOWN_HANDSHAKE", "KOI_REQUIRE_SIGNED_ENVELOPES", "KOI_ADMIN_TOKEN",
+                "KOI_STATE_DIR"):  # the token file too: an inherited state dir could hold one
         monkeypatch.delenv(var, raising=False)
     monkeypatch.setenv("KOI_NET_REQUIRE_APPROVED_EDGE_FOR_POLL", "true")
     app = FastAPI()
@@ -133,6 +134,15 @@ async def test_by_default_a_new_inbound_edge_is_proposed(node):
     assert (await _edge(node, who.rid, node.me.rid))["status"] == "PROPOSED"
 
 
+async def test_off_the_membrane_a_new_inbound_edge_is_proposed_too(node, monkeypatch):
+    # Every new inbound edge is PROPOSED, membrane or not. Under PR #15's policy this case was
+    # APPROVED; it changed deliberately.
+    monkeypatch.setenv("KOI_NET_REQUIRE_APPROVED_EDGE_FOR_POLL", "false")
+    who = node.peer()
+    r = await node.client.post("/koi-net/handshake", json=_handshake(who.rid, who.name, public_key=who.pub))
+    assert r.json()["edge_status"] == "PROPOSED"
+
+
 async def test_setting_it_false_restores_auto_approval(node, monkeypatch):
     monkeypatch.setenv("KOI_NET_DEFER_UNKNOWN_HANDSHAKE", "false")
     who = node.peer()
@@ -188,14 +198,51 @@ async def test_handshake_signed_by_the_pinned_key_updates_the_peer(node):
     assert (await _row(node, who))["base_url"] == "http://peer.invalid/moved"
 
 
-async def test_local_operator_can_update_a_known_peer(node):
+ADMIN = "identity-test-admin-token"
+
+
+async def test_local_operator_can_update_a_known_peer(node, monkeypatch):
+    # The operator is a loopback caller presenting the configured admin bearer: loopback alone
+    # is not authority (fail-closed admin guard).
+    monkeypatch.setenv("KOI_ADMIN_TOKEN", ADMIN)
     who = node.peer()
     await _seed_known_peer(node, who)
+    # Loopback without the bearer is not the operator, even with a token configured: refused,
+    # and the row is unchanged.
+    before = await _row(node, who)
     r = await node.operator.post("/koi-net/handshake", json=_handshake(
+        who.rid, who.name, base_url="http://peer.invalid/operator", events=["person", "vault-file"]))
+    assert r.status_code == 401 and r.json()["error_code"] == "SIGNED_HANDSHAKE_REQUIRED", r.text
+    assert await _row(node, who) == before
+    r = await node.operator.post("/koi-net/handshake", headers={"Authorization": f"Bearer {ADMIN}"}, json=_handshake(
         who.rid, who.name, base_url="http://peer.invalid/operator", events=["person", "vault-file"]))
     assert r.status_code == 200, r.text
     assert (await _row(node, who))["base_url"] == "http://peer.invalid/operator"
-    assert (await _edge(node, who.rid, node.me.rid))["rid_types"] == ["person", "vault-file"]
+    # The profile changes; an APPROVED edge's grant does not, even from the operator: a handshake
+    # changes rid_types only on a PROPOSED edge, so an operator-narrowed grant survives (changed
+    # deliberately from PR #15's expectation, which rewrote the granted types). The PROPOSED case:
+    assert (await _edge(node, who.rid, node.me.rid))["rid_types"] == ["person"]
+    other = node.peer("identity-test-proposed")
+    await _seed_known_peer(node, other, status="PROPOSED")
+    r = await node.operator.post("/koi-net/handshake", headers={"Authorization": f"Bearer {ADMIN}"}, json=_handshake(
+        other.rid, other.name, base_url="http://peer.invalid/operator", events=["person", "vault-file"]))
+    assert r.status_code == 200, r.text
+    assert (await _edge(node, other.rid, node.me.rid))["rid_types"] == ["person", "vault-file"]
+
+
+async def test_the_operator_path_without_a_configured_token_is_refused_and_writes_nothing(node):
+    """No admin token configured: a loopback caller is not the operator, so an unsigned change
+    to a known peer is refused as any stranger's would be, and the row is unchanged."""
+    who = node.peer()
+    await _seed_known_peer(node, who)
+    before = await _row(node, who)
+    r = await node.operator.post("/koi-net/handshake", json=_handshake(
+        who.rid, who.name, base_url="http://peer.invalid/operator", events=["person", "vault-file"]))
+    assert r.status_code == 401 and r.json()["error_code"] == "SIGNED_HANDSHAKE_REQUIRED", r.text
+    assert await _row(node, who) == before
+    # Why it was refused: the same loopback caller is no operator, the guard failing closed.
+    r = await node.operator.post("/koi-net/edges/approve", json={"edge_rid": "orn:koi-net.edge:none"})
+    assert r.status_code == 503 and r.json()["error_code"] == "ADMIN_TOKEN_UNCONFIGURED", r.text
 
 
 async def test_a_different_public_key_is_still_refused(node):
@@ -206,7 +253,7 @@ async def test_a_different_public_key_is_still_refused(node):
     assert r.json()["error_code"] == "KEY_MISMATCH"
 
 
-async def test_a_new_node_does_not_take_over_an_existing_alias_but_the_operator_can_move_it(node):
+async def test_a_new_node_does_not_take_over_an_existing_alias_but_the_operator_can_move_it(node, monkeypatch):
     first, second, third = node.peer(), node.peer("identity-test-second"), node.peer("identity-test-third")
     shared_name = f"identity-test-shared-{uuid.uuid4().hex[:10]}"
     node.aliases.append(shared_name)
@@ -218,7 +265,12 @@ async def test_a_new_node_does_not_take_over_an_existing_alias_but_the_operator_
     await node.client.post("/koi-net/handshake", json=_handshake(first.rid, shared_name, public_key=first.pub))
     await node.client.post("/koi-net/handshake", json=_handshake(second.rid, shared_name, public_key=second.pub))
     assert await alias() == first.rid
+    monkeypatch.setenv("KOI_ADMIN_TOKEN", ADMIN)
+    # Loopback without the bearer is not the operator: the name stays where it is.
     await node.operator.post("/koi-net/handshake", json=_handshake(third.rid, shared_name, public_key=third.pub))
+    assert await alias() == first.rid
+    await node.operator.post("/koi-net/handshake", headers={"Authorization": f"Bearer {ADMIN}"},
+                             json=_handshake(third.rid, shared_name, public_key=third.pub))
     assert await alias() == third.rid
 
 

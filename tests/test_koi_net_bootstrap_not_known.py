@@ -86,6 +86,9 @@ async def test_an_approved_outbound_edge_does_not_approve_a_new_inbound_edge(nod
 
 async def test_the_operator_approves_the_inbound_edge_and_a_re_handshake_keeps_it(node, monkeypatch):
     monkeypatch.setenv("KOI_NET_DEFER_UNKNOWN_HANDSHAKE", "true")
+    # The operator is a loopback caller presenting the configured admin bearer; loopback alone is
+    # not authority (fail-closed admin guard).
+    monkeypatch.setenv("KOI_ADMIN_TOKEN", "bootstrap-test-admin-token")
     who = node.peer()
     # First contact is unsigned: this node has no key for the peer yet.
     r = await node.client.post("/koi-net/handshake", json=_handshake(who.rid, who.name, public_key=who.pub))
@@ -95,11 +98,57 @@ async def test_the_operator_approves_the_inbound_edge_and_a_re_handshake_keeps_i
     # A remote caller cannot approve it.
     assert (await node.client.post("/koi-net/edges/approve", json={"edge_rid": edge_rid})).status_code in (401, 403)
     assert (await _edge(node, who.rid, node.me.rid))["status"] == "PROPOSED"
-    a = await node.operator.post("/koi-net/edges/approve", json={"edge_rid": edge_rid})
+    # Nor can a loopback caller without the bearer, with a token configured.
+    r = await node.operator.post("/koi-net/edges/approve", json={"edge_rid": edge_rid})
+    assert r.status_code == 401 and r.json()["error_code"] == "UNAUTHORIZED", r.text
+    assert (await _edge(node, who.rid, node.me.rid))["status"] == "PROPOSED"
+    a = await node.operator.post("/koi-net/edges/approve", headers={"Authorization": "Bearer bootstrap-test-admin-token"},
+                                 json={"edge_rid": edge_rid})
     assert a.status_code == 200, a.text
     assert (await _edge(node, who.rid, node.me.rid))["status"] == "APPROVED"
     hs = sign_envelope(_handshake(who.rid, who.name, public_key=who.pub), who.rid, node.me.rid, who.key)
     r = await node.client.post("/koi-net/handshake", json=hs)
     assert r.status_code == 200, r.text
     assert _payload(r)["edge_status"] == "APPROVED"
+    assert (await _edge(node, who.rid, node.me.rid))["status"] == "APPROVED"
+
+
+async def _peer_we_serve(node):
+    """A peer with a row and only the us->peer edge, APPROVED: we serve it, nothing more."""
+    who = node.peer()
+    async with node.pool.acquire() as conn:
+        await conn.execute(
+            "INSERT INTO koi_net_nodes (node_rid, node_name, node_type, base_url, public_key, status) "
+            "VALUES ($1, $2, 'FULL', 'http://peer.invalid/original', $3, 'active')",
+            who.rid, who.name, who.pub)
+        await conn.execute(
+            "INSERT INTO koi_net_edges (edge_rid, source_node, target_node, edge_type, status, rid_types) "
+            "VALUES ($1, $2, $3, 'POLL', 'APPROVED', ARRAY['person'])",
+            f"orn:koi-net.edge:{node.me.rid}>{who.rid}:poll", node.me.rid, who.rid)
+    assert await _edge(node, who.rid, node.me.rid) is None
+    return who
+
+
+async def test_an_outbound_approval_does_not_approve_the_new_inbound_edge(node):
+    """With the setting at its default. PR #15 had pinned that an APPROVED us->peer edge made the
+    new peer->us edge APPROVED: a step from "we serve it" to "it may push to us". Every new
+    inbound edge is PROPOSED instead, and no "known" test is read at all."""
+    who = await _peer_we_serve(node)
+    hs = sign_envelope(_handshake(who.rid, who.name, public_key=who.pub, base_url="http://peer.invalid/original"),
+                       who.rid, node.me.rid, who.key)
+    r = await node.client.post("/koi-net/handshake", json=hs)
+    assert r.status_code == 200, r.text
+    assert (await _edge(node, who.rid, node.me.rid))["status"] == "PROPOSED"
+    assert (await _edge(node, node.me.rid, who.rid))["status"] == "APPROVED"  # unchanged
+
+
+async def test_the_operator_then_approves_the_inbound_edge(node, monkeypatch):
+    monkeypatch.setenv("KOI_ADMIN_TOKEN", "bootstrap-test-admin-token")
+    who = await _peer_we_serve(node)
+    hs = sign_envelope(_handshake(who.rid, who.name, public_key=who.pub, base_url="http://peer.invalid/original"),
+                       who.rid, node.me.rid, who.key)
+    assert (await node.client.post("/koi-net/handshake", json=hs)).status_code == 200
+    r = await node.operator.post("/koi-net/edges/approve", headers={"Authorization": "Bearer bootstrap-test-admin-token"},
+                                 json={"edge_rid": f"orn:koi-net.edge:{who.rid}>{node.me.rid}:poll"})
+    assert r.status_code == 200, r.text
     assert (await _edge(node, who.rid, node.me.rid))["status"] == "APPROVED"

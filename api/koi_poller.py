@@ -33,7 +33,12 @@ from api.koi_envelope import (
     unwrap_and_verify_response,
     EnvelopeError,
 )
-from api.koi_protocol import NodeProfile, timestamp_to_z_format
+from api.koi_protocol import (
+    NodeProfile, complete_manifest, koi_net_event, koi_net_url, timestamp_to_z_format, valid_peer_base_url,
+)
+import api.koi_net_floor  # noqa: F401  (Python >= 3.12, before any koi_net import)
+from koi_net.protocol.api.paths import BROADCAST_EVENTS_PATH, POLL_EVENTS_PATH
+from api.koi_net_barred import BARRED_NODE_STATUSES, barred_keys, canonical_key_b64, key_is_barred, node_is_barred
 
 logger = logging.getLogger(__name__)
 
@@ -61,6 +66,15 @@ REQUIRE_SIGNED_RESPONSES = _bool_env(
 )
 COMMONS_INTAKE_ENABLED = _bool_env("KOI_COMMONS_INTAKE_ENABLED", False)
 COMMONS_AUTO_APPROVE = _bool_env("KOI_COMMONS_AUTO_APPROVE", False)
+
+
+def _peer_does_not_know_us(resp) -> bool:
+    """A peer's refusal because it has no key for us (first contact), not any other refusal."""
+    try:
+        body = resp.json()
+    except ValueError:
+        return False
+    return isinstance(body, dict) and (body.get("error") == "unknown_node" or body.get("error_code") == "UNKNOWN_SOURCE_NODE")
 
 
 class KOIPoller:
@@ -211,15 +225,22 @@ class KOIPoller:
                 WHERE e.target_node = $1
                   AND e.edge_type = 'POLL'
                   AND e.status = 'APPROVED'
+                  AND n.status <> ALL($2::text[])  -- never poll a node an operator rejected (register 26)
                 """,
-                self.node_rid,
+                self.node_rid, list(BARRED_NODE_STATUSES),
             )
 
+        async with self.pool.acquire() as conn:
+            barred = await barred_keys(conn)
+        edges = [e for e in edges if canonical_key_b64(e["public_key"]) not in barred]
+        own_url = self.node_profile.base_url if self.node_profile else None
         for edge in edges:
             source_node = edge["source_node"]
-            base_url = edge["base_url"]
+            # A stored URL came from a profile we cannot vouch for (/handshake accepts one
+            # unsigned); never send a signed request to one that fails the check.
+            base_url = valid_peer_base_url(edge["base_url"], own_url)
             if not base_url:
-                logger.warning(f"No base_url for {source_node}, skipping")
+                logger.warning(f"No usable base_url for {source_node}, skipping")
                 continue
 
             if self._should_skip_for_backoff(
@@ -268,18 +289,24 @@ class KOIPoller:
         async with self.pool.acquire() as conn:
             # WEBHOOK: source = us (provider), target = subscriber
             edges = await conn.fetch(
-                """SELECT e.target_node, e.rid_types, n.base_url, n.public_key
+                """SELECT e.target_node, e.rid_types, n.base_url, n.public_key,
+                          (n.encryption_key IS NOT NULL OR n.ontology_uri IS NOT NULL) AS reads_extensions
                    FROM koi_net_edges e
                    JOIN koi_net_nodes n ON n.node_rid = e.target_node
                    WHERE e.source_node = $1
                      AND e.edge_type = 'WEBHOOK'
-                     AND e.status = 'APPROVED'""",
-                self.node_rid,
+                     AND e.status = 'APPROVED'
+                     AND n.status <> ALL($2::text[])  -- never push to a node an operator rejected""",
+                self.node_rid, list(BARRED_NODE_STATUSES),
             )
+            barred = await barred_keys(conn)
+        # ...nor to one holding a barred key under another RID.
+        edges = [e for e in edges if canonical_key_b64(e["public_key"]) not in barred]
 
+        own_url = self.node_profile.base_url if self.node_profile else None
         for edge in edges:
             target_node = edge["target_node"]
-            base_url = edge["base_url"]
+            base_url = valid_peer_base_url(edge["base_url"], own_url)
             if not base_url:
                 continue
 
@@ -292,16 +319,35 @@ class KOIPoller:
                 continue
 
             # Phase 1: Peek (no side effects)
+            # mark_excluded: an event this edge's scope excludes is marked delivered, as
+            # poll() does, so it cannot starve a narrow WEBHOOK edge.
             events = await self.event_queue.peek_undelivered(
-                target_node, limit=50, rid_types=edge["rid_types"]
+                target_node, limit=50, rid_types=edge["rid_types"], mark_excluded=True
             )
             if not events:
                 continue
 
-            # Phase 2: Push to target's /events/broadcast
+            # Phase 2: Push to target's /events/broadcast. Divergence 24: the events are
+            # built as koi-net's Event so a koi-net node's signature check passes; event_id
+            # and our other row fields go only to a peer that runs our code.
             try:
-                payload = {"type": "events_payload", "events": events}
-                url = f"{base_url.rstrip('/')}/koi-net/events/broadcast"
+                reads_extensions = bool(edge["reads_extensions"])
+                wire, unrepresentable = [], []
+                for e in events:
+                    we = koi_net_event(e["rid"], e["event_type"],
+                                       complete_manifest(e.get("manifest"), e["rid"], e.get("contents")),
+                                       e.get("contents"), event_id=e.get("event_id"), extensions=reads_extensions)
+                    (wire if we is not None else unrepresentable).append(we if we is not None else e["event_id"])
+                if unrepresentable:
+                    # A koi-net peer can never accept these: withheld for good, so
+                    # they cannot sit at the head of this edge's queue.
+                    await self.event_queue.mark_delivered(unrepresentable, target_node)
+                    logger.info(f"WEBHOOK push to {target_node}: withheld {len(unrepresentable)} event(s) koi-net cannot represent")
+                    events = [e for e in events if e["event_id"] not in set(unrepresentable)]
+                if not wire:
+                    continue
+                payload = {"type": "events_payload", "events": wire}
+                url = koi_net_url(base_url, BROADCAST_EVENTS_PATH)
 
                 if self.private_key:
                     signed_payload = sign_envelope(
@@ -313,7 +359,21 @@ class KOIPoller:
                 async with httpx.AsyncClient(timeout=15.0) as client:
                     resp = await client.post(url, json=signed_payload)
 
-                if resp.status_code == 200:
+                # An empty 200 is a koi-net node's acknowledgement. From a node running our code
+                # it means its membrane dropped the events, so it is not delivery.
+                if resp.status_code == 200 and not reads_extensions and resp.content.strip() in (b"", b"null"):
+                    # koi-net answers a broadcast with an empty body (spec 4.1.1; a null JSON
+                    # body from its server). HTTP 200 is its acknowledgement of every event.
+                    event_ids = [e["event_id"] for e in events]
+                    await self.event_queue.mark_delivered(event_ids, target_node)
+                    logger.info(f"WEBHOOK push to {target_node}: {len(events)} events delivered (empty reply)")
+                    self._record_success(
+                        target_node,
+                        self._webhook_backoff,
+                        self._next_webhook_retry_at,
+                        "WEBHOOK",
+                    )
+                elif resp.status_code == 200:
                     raw_body = resp.json()
                     peer_key = edge["public_key"]
 
@@ -410,7 +470,7 @@ class KOIPoller:
         """Fetch a peer public key from /koi-net/health and persist it locally."""
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
-                resp = await client.get(f"{base_url}/koi-net/health")
+                resp = await client.get(koi_net_url(base_url, "/health"))
             if resp.status_code != 200:
                 return None
             health = resp.json()
@@ -437,7 +497,25 @@ class KOIPoller:
         ontology_uri = node.get("ontology_uri")
         ontology_version = node.get("ontology_version")
         encryption_key = node.get("encryption_key")
+        # The key must be the one the RID is bound to (the URL could serve any key), and a node
+        # or key an operator barred is never learned or reactivated.
+        from api.koi_net_router import _security_policy  # at call time: the router imports this module
+        from api.node_identity import node_rid_matches_public_key
+        try:
+            served = load_public_key_from_der_b64(public_key)
+        except Exception:
+            served = None
+        policy = _security_policy()
+        if served is None or not node_rid_matches_public_key(
+            source_node, served, allow_legacy16=policy["allow_legacy16"],
+            allow_der64=policy["allow_der64"], allow_b64_64=policy["allow_b64_64"],
+        ):
+            logger.warning(f"Refusing the key at {base_url} for {source_node}: not bound to its RID")
+            return None
         async with self.pool.acquire() as conn:
+            if await node_is_barred(conn, source_node) or await key_is_barred(conn, public_key):
+                logger.warning(f"Refusing to learn a key for {source_node}: the node or key was rejected")
+                return None
             # Key pinning: check for mismatch before upsert
             existing_key = await conn.fetchval(
                 "SELECT public_key FROM koi_net_nodes WHERE node_rid = $1",
@@ -459,13 +537,14 @@ class KOIPoller:
                      encryption_key, ontology_uri, ontology_version, status, last_seen)
                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'active', NOW())
                 ON CONFLICT (node_rid) DO UPDATE SET
+                    public_key = COALESCE(koi_net_nodes.public_key, EXCLUDED.public_key),
                     node_name = EXCLUDED.node_name,
                     node_type = EXCLUDED.node_type,
                     base_url = EXCLUDED.base_url,
                     encryption_key = COALESCE(EXCLUDED.encryption_key, koi_net_nodes.encryption_key),
                     ontology_uri = COALESCE(EXCLUDED.ontology_uri, koi_net_nodes.ontology_uri),
                     ontology_version = COALESCE(EXCLUDED.ontology_version, koi_net_nodes.ontology_version),
-                    status = 'active',
+                    status = CASE WHEN koi_net_nodes.status IN ('rejected', 'revoked') THEN koi_net_nodes.status ELSE 'active' END,
                     last_seen = NOW()
                 """,
                 source_node,
@@ -482,25 +561,41 @@ class KOIPoller:
         if encryption_key and self.vault_sync:
             self.vault_sync.invalidate_shared_key(source_node)
 
-        logger.info(f"Learned public key for {source_node} from {base_url}/koi-net/health")
+        logger.info(f"Learned public key for {source_node} from {koi_net_url(base_url, '/health')}")
         return public_key
 
     async def _send_handshake(self, source_node: str, base_url: str) -> bool:
-        """Send unsigned handshake so peers can register our public key/profile."""
+        """Send our profile so a peer can register (or refresh) our public key and profile.
+
+        Signed first: a peer that knows our key accepts a changed profile (base_url,
+        encryption_key) only under that key's signature (koi-processor-node PR #15, register
+        entry 26). A peer that does not know us yet cannot verify the signature and answers
+        unknown_node; only then is the handshake sent unsigned, which is first contact.
+        """
         if not self.node_profile:
             return False
 
-        payload = {
-            "type": "handshake",
-            "profile": self.node_profile.model_dump(exclude_none=True),
-        }
+        # issued_at lets a peer refuse a replay of an older signed handshake (register 26).
+        # It rides inside the profile, which every version of ours ignores when unknown.
+        profile = self.node_profile.model_dump(exclude_none=True)
+        profile["issued_at"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+        payload = {"type": "handshake", "profile": profile}
+        attempts = []
+        if self.private_key:
+            attempts.append(("signed", sign_envelope(payload, self.node_rid, source_node, self.private_key)))
+        attempts.append(("unsigned", payload))
 
-        try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                resp = await client.post(f"{base_url}/koi-net/handshake", json=payload)
-        except Exception as exc:
-            logger.warning(f"Handshake to {source_node} failed: {exc}")
-            return False
+        resp = None
+        for kind, body in attempts:
+            try:
+                async with httpx.AsyncClient(timeout=10.0) as client:
+                    resp = await client.post(koi_net_url(base_url, "/handshake"), json=body)
+            except Exception as exc:
+                logger.warning(f"Handshake to {source_node} failed: {exc}")
+                return False
+            if resp.status_code == 200 or kind == "unsigned" or not _peer_does_not_know_us(resp):
+                break
+            logger.info(f"Handshake to {source_node}: the peer does not know our key yet; sending first contact unsigned")
 
         if resp.status_code == 200:
             logger.info(f"Handshake accepted by {source_node}; peer should now have our public key")
@@ -540,7 +635,7 @@ class KOIPoller:
 
         async with httpx.AsyncClient(timeout=30.0) as client:
             resp = await client.post(
-                f"{base_url}/koi-net/events/poll", json=request_body
+                koi_net_url(base_url, POLL_EVENTS_PATH), json=request_body
             )
 
         if resp.status_code != 200:
@@ -557,7 +652,7 @@ class KOIPoller:
                 if await self._send_handshake(source_node, base_url):
                     async with httpx.AsyncClient(timeout=30.0) as client:
                         resp = await client.post(
-                            f"{base_url}/koi-net/events/poll", json=request_body
+                            koi_net_url(base_url, POLL_EVENTS_PATH), json=request_body
                         )
 
             if resp.status_code != 200:
@@ -936,7 +1031,7 @@ class KOIPoller:
             request_body = confirm_payload
             request_body["node_id"] = self.node_rid
 
-        confirm_url = f"{base_url}/koi-net/events/confirm"
+        confirm_url = koi_net_url(base_url, "/events/confirm")
         logger.debug(f"Confirming {len(event_ids)} events at {confirm_url}: {event_ids}")
 
         try:

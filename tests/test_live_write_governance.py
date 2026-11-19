@@ -139,6 +139,12 @@ def _ungoverned(scan: dict[str, dict]) -> set[str]:
 # describes.
 KNOWN_UNGOVERNED: dict[str, str] = {
     # --- Safe: the endpoint does not persist -------------------------------
+    "tests/interop/test_gate.py": (
+        "Runs only under tests/interop/run_gate.py (tests/interop/conftest.py does not "
+        "collect it otherwise). Its writes (vault-sync configure/trigger, edges/approve) go "
+        "to a throwaway node the runner starts on 127.0.0.1, backed by a database in a "
+        "throwaway cluster the runner builds and stops; nothing it writes outlives the run."
+    ),
     "tests/test_contract.py": (
         "POSTs an empty body to each catalogued endpoint to prove it is registered "
         "(expects 2xx or 422), plus /entity/resolve without persist=true. It runs only "

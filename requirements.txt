@@ -1,13 +1,13 @@
 # KOI Processor Requirements
-# Python 3.8+ required
+# Python 3.12+ required (koi-net 2.1.2); tested on 3.13
 
 # =============================================================================
 # Core Dependencies
 # =============================================================================
 
 # Web Framework
-fastapi==0.104.1
-uvicorn[standard]==0.24.0
+fastapi==0.162.0
+uvicorn[standard]==0.54.0
 pydantic>=2.0.0
 flask==3.0.0
 flask-cors==4.0.0
@@ -25,7 +25,7 @@ pgvector==0.2.4
 sqlglot==30.20.0
 
 # HTTP & Networking
-httpx==0.25.2
+httpx==0.28.1
 requests==2.31.0
 aiohttp>=3.9.0
 
@@ -48,7 +48,7 @@ typing-extensions>=4.12.2
 pyyaml==6.0.1
 # Extraction schema validation (scripts/extract_deep_documents.py)
 jsonschema==4.26.0
-cryptography>=42.0.0
+cryptography>=50.0.0
 watchdog>=4.0.0
 
 # Logging
@@ -94,6 +94,10 @@ mypy==1.7.1
 # KOI Protocol Alignment (P0)
 # =============================================================================
 rid-lib==3.3.0
+# KOI-net protocol models, paths and edge generation (koi_net.protocol), at runtime since
+# 2026-11-05. Requires Python >= 3.12: koi-net 2.1.2 uses PEP 695 `type` statements, though
+# its metadata declares >= 3.10.
+koi-net==2.1.2
 
 # =============================================================================
 # Claims Engine Phase 3 — Graph IRI generation (URDNA2015 canonicalization)

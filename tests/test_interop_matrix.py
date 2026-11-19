@@ -157,6 +157,18 @@ def unique_entity_name(governed_live_write_run):
 # Phase 0.5e — KOI-net interop matrix
 # ---------------------------------------------------------------------------
 
+def _admin_token_unconfigured(r) -> bool:
+    """The fail-closed admin guard answers 503 ADMIN_TOKEN_UNCONFIGURED when the node under
+    test has no admin token, loopback included; that is the same missing setup as 401/403."""
+    if r.status_code != 503:
+        return False
+    try:
+        body = r.json()
+    except ValueError:
+        return False
+    return "ADMIN_TOKEN_UNCONFIGURED" in str(body)
+
+
 @pytest.mark.integration
 @pytest.mark.federation
 class TestSignedPollCycle:
@@ -380,7 +392,7 @@ class TestVaultSyncRoundTrip:
         r = client.post("/koi-net/vault-sync/trigger", json={})
         if r.status_code == 404:
             pytest.skip("Vault sync not available on this profile")
-        if r.status_code in (401, 403):
+        if r.status_code in (401, 403) or _admin_token_unconfigured(r):
             pytest.skip(
                 "Vault sync trigger requires admin token (KOI_ADMIN_TOKEN not configured in test env)"
             )
@@ -392,7 +404,7 @@ class TestVaultSyncRoundTrip:
         # Poll for completion (up to 30s)
         for _ in range(15):
             status_r = client.get("/koi-net/vault-sync/status")
-            if status_r.status_code in (401, 403):
+            if status_r.status_code in (401, 403) or _admin_token_unconfigured(status_r):
                 pytest.skip("Vault sync status requires admin token in test env")
             if status_r.status_code == 200:
                 status = status_r.json()

@@ -265,15 +265,21 @@ def _fetch(env, pg, edges):
 def test_issue3b_fetch_through_the_callers_own_edge_gets_nothing(env, pg):
     """Only the peer-to-us edge, the one a first handshake used to approve, is APPROVED."""
     out = _fetch(env, pg, [("peer", "own")])
-    assert out == {"manifests": [], "bundles": [], "rids": []}, out
+    assert out["manifests"] == [] and out["bundles"] == [], out
+    # /rids/fetch lists this node's own node RID to any caller, as koi-net does; data RIDs still
+    # follow the serving edge, so none comes through the caller's own edge.
+    assert OWN in out["rids"], out
+    assert [r for r in out["rids"] if r != OWN] == [], out
 
 
 def test_issue3b_fetch_through_the_edge_we_serve_gets_rows(env, pg):
     out = _fetch(env, pg, [("own", "peer")])
-    assert len(out["manifests"]) == 1 and len(out["bundles"]) == 1 and out["rids"] == [RID], out
+    assert len(out["manifests"]) == 1 and len(out["bundles"]) == 1, out
+    assert OWN in out["rids"] and [r for r in out["rids"] if r != OWN] == [RID], out  # own node RID listed, as koi-net does
 
 
 def test_issue3b_fetch_with_both_edges_gets_rows(env, pg):
     """Premise control: the routes serve the row at all, on any version, when both edges are APPROVED."""
     out = _fetch(env, pg, [("own", "peer"), ("peer", "own")])
-    assert len(out["manifests"]) == 1 and len(out["bundles"]) == 1 and out["rids"] == [RID], out
+    assert len(out["manifests"]) == 1 and len(out["bundles"]) == 1, out
+    assert OWN in out["rids"] and [r for r in out["rids"] if r != OWN] == [RID], out  # own node RID listed, as koi-net does

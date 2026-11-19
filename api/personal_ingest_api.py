@@ -264,7 +264,9 @@ if os.getenv('KOI_NET_ENABLED', 'false').lower() in ('true', '1', 'yes'):
         app.include_router(koi_net_router, prefix="/koi-net")
         logging.getLogger(__name__).info("KOI-net federation router mounted")
     except ImportError as e:
-        logging.getLogger(__name__).warning(f"KOI-net federation not available: {e}")
+        # KOI_NET_ENABLED asked for it, so this is an error, not a notice (e.g. Python < 3.12,
+        # api/koi_net_floor.py). The rest of the API still starts.
+        logging.getLogger(__name__).error(f"KOI-net federation not available: {e}")
 
 # Configuration
 DB_URL = os.getenv('POSTGRES_URL', 'postgresql://koi:@localhost:5432/personal_koi')

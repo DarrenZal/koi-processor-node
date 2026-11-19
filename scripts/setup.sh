@@ -25,11 +25,11 @@ cd "$PROJECT_DIR"
 
 # Step 1: Check Python version
 echo -e "${YELLOW}Step 1: Checking Python version...${NC}"
-if python3 -c "import sys; exit(0 if sys.version_info >= (3,8) else 1)"; then
+if python3 -c "import sys; exit(0 if sys.version_info >= (3,12) else 1)"; then
     PYTHON_VERSION=$(python3 --version | cut -d" " -f2)
     echo -e "${GREEN}✓ Python $PYTHON_VERSION found${NC}"
 else
-    echo -e "${RED}✗ Python 3.8+ required${NC}"
+    echo -e "${RED}✗ Python 3.12+ required (koi-net 2.1.2)${NC}"
     exit 1
 fi
 

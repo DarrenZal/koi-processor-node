@@ -1,7 +1,8 @@
 """KOI-net wire conformance: our node's payloads, parsed by the upstream `koi-net` models.
 
-Test-only. `koi-net` is not a runtime dependency of this repository; it is installed in a
-separate venv from tests/conformance/requirements.txt (koi-net 2.1.2 needs Python >= 3.12).
+Runs in a separate venv from tests/conformance/requirements.txt (koi-net 2.1.2 needs
+Python >= 3.12). Our node has also imported `koi_net.protocol` at runtime since 2026-11-05;
+these tests are an independent koi-net client and import nothing from api/.
 
 The tests act as a fresh koi-net client against a THROWAWAY instance of our node:
 every request is built and signed with koi-net's own models (`UnsignedEnvelope.sign_with`),
@@ -17,15 +18,17 @@ conformance-* and listen on 127.0.0.1/localhost; tests/koi_test_targets.py refus
 live API's port. Skips when KOI_TEST_API_URL is unset.
 """
 import json
+import os
 from urllib.parse import urlparse
 
 import pytest
 from cryptography.exceptions import InvalidSignature
 from pydantic import ValidationError
 
-koi_net = pytest.importorskip("koi_net", reason="koi-net is test-only; see tests/conformance/requirements.txt")
+koi_net = pytest.importorskip("koi_net", reason="koi-net is not installed in this interpreter; see tests/conformance/requirements.txt")
 httpx = pytest.importorskip("httpx")
 
+from rid_lib import RID  # noqa: E402
 from rid_lib.ext import Bundle  # noqa: E402
 from rid_lib.ext.utils import sha256_hash  # noqa: E402
 from rid_lib.types import KoiNetEdge, KoiNetNode  # noqa: E402
@@ -82,8 +85,18 @@ def node():
 @pytest.fixture(scope="module")
 def client(node):
     """A fresh koi-net identity that introduces itself the way a stock node does."""
+    return _introduce(node, "conformance-client")
+
+
+@pytest.fixture(scope="module")
+def other_client(node):
+    """A second fresh identity, for behaviour that involves two peers."""
+    return _introduce(node, "conformance-other")
+
+
+def _introduce(node, name):
     priv = PrivateKey.generate()
-    rid = KoiNetNode("conformance-client", sha256_hash(priv.public_key().to_der()))
+    rid = KoiNetNode(name, sha256_hash(priv.public_key().to_der()))
     profile = NodeProfile(
         base_url="http://127.0.0.1:9/koi-net",  # never contacted
         node_type=NodeType.FULL,
@@ -156,9 +169,6 @@ def test_fetch_manifests_response_parses(node, client):
     assert len(payload.manifests) + len(payload.not_found) == 2
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError,
-                   reason="divergence 15: /bundles/fetch does not serve the node's own "
-                          "KoiNetNode bundle, so a stock node cannot learn our profile")
 def test_fetch_bundles_returns_our_node_bundle(node, client):
     """A stock node learns a peer's profile by fetching the peer's own KoiNetNode bundle."""
     resp = _post(node, client, FETCH_BUNDLES_PATH, FetchBundles(rids=[node["rid"]]))
@@ -171,7 +181,45 @@ def test_fetch_bundles_returns_our_node_bundle(node, client):
     assert [b.rid for b in payload.bundles] == [node["rid"]], (
         f"own node bundle not served: bundles={[str(b.rid) for b in payload.bundles]} "
         f"not_found={[str(r) for r in payload.not_found]}")
-    payload.bundles[0].validate_contents(NodeProfile)
+    profile = payload.bundles[0].validate_contents(NodeProfile)
+    # Divergence 21: a stock node subscribes to what we provide, compared as RID types.
+    assert KoiNetNode in profile.provides.event and KoiNetEdge in profile.provides.event, profile.provides.event
+
+
+def test_fetch_rids_lists_our_node_for_node_requests(node, client):
+    """A stock node catches up with fetch_rids(rid_types=[KoiNetNode]) after proposing an edge."""
+    payload = _parse_signed(node, FETCH_RIDS_PATH, _post(node, client, FETCH_RIDS_PATH, FetchRids(rid_types=[KoiNetNode])))
+    assert node["rid"] in payload.rids, [str(r) for r in payload.rids]
+
+
+def test_fetch_manifests_serves_our_node_manifest(node, client):
+    payload = _parse_signed(node, FETCH_MANIFESTS_PATH, _post(node, client, FETCH_MANIFESTS_PATH, FetchManifests(rids=[node["rid"]])))
+    assert [m.rid for m in payload.manifests] == [node["rid"]]
+
+
+def test_inbound_broadcast_events_are_served_to_every_poller(node, client, other_client):
+    """Divergence 23, PINNED (recorded; the decision is open, so this asserts today's behaviour).
+
+    /events/broadcast stores a peer's events in the outbound broadcast table with no target,
+    and poll does not exclude the sender, so a second peer is served them and so is the
+    sender itself. If this test fails, the behaviour changed: update the register's entry 23."""
+    probe = Bundle.generate(RID.from_string(f"orn:conformance.probe:{client['rid'].hash[:12]}-relay"),
+                            {"probe": "divergence 23"})
+    resp = _post(node, client, BROADCAST_EVENTS_PATH,
+                 EventsPayload(events=[Event.from_bundle(event_type=EventType.NEW, bundle=probe)]))
+    if resp.status_code != 200:
+        pytest.fail(f"setup: broadcast HTTP {resp.status_code} {resp.text[:300]}")
+
+    def served_to(peer):
+        try:
+            payload = _parse_signed(node, POLL_EVENTS_PATH,
+                                    _post(node, peer, POLL_EVENTS_PATH, PollEvents(limit=500)), verify=False)
+        except Exception as exc:  # noqa: BLE001
+            pytest.fail(f"setup: poll did not return a parseable payload: {exc!r}")
+        return [e for e in payload.events if e.rid == probe.rid]
+
+    assert served_to(other_client), "a second peer was not served the first peer's broadcast event"
+    assert served_to(client), "the sender was not served its own broadcast event back"
 
 
 def test_poll_events_response_parses(node, client):
@@ -180,9 +228,6 @@ def test_poll_events_response_parses(node, client):
     assert isinstance(payload.events, list)
 
 
-@pytest.mark.xfail(strict=True, raises=InvalidSignature,
-                   reason="divergence 16: poll events carry an event_id extension field inside "
-                          "the signed payload; koi-net's Event drops it, so the signature fails")
 def test_poll_events_signature_verifies(node, client):
     # Poll delivers each event once per requester, so create one and verify the same
     # response that carries it; an empty event list would verify trivially.
@@ -267,11 +312,22 @@ def _make_edge(node):
         "provides": {"event": [], "state": []}, "public_key": priv.public_key().to_der()}}
     r = httpx.post(f"{node['base']}/handshake", json=req, timeout=20)
     assert r.status_code == 200, r.text[:300]
+    # Every new inbound edge starts PROPOSED (register entry 26); approve it as an operator
+    # would. tests/interop/run_gate.py passes the throwaway node's admin token.
+    token = os.environ.get("KOI_GATE_ADMIN_TOKEN")
+    if not token:
+        pytest.fail("KOI_GATE_ADMIN_TOKEN is not set: run this suite through tests/interop/run_gate.py")
+    body = r.json()
+    edge_rid = body.get("payload", body)["edge_rid"]
+    a = httpx.post(f"{node['base']}/edges/approve", json={"edge_rid": edge_rid},
+                   headers={"Authorization": f"Bearer {token}"}, timeout=20)
+    assert a.status_code == 200, a.text[:300]
 
 
 @pytest.mark.xfail(strict=True, raises=ValidationError,
-                   reason="divergence 12: /koi-net/edges uses edge_rid/source_node/target_node, "
-                          "not EdgeProfile's source/target/rid_types")
+                   reason="divergence 12, admin endpoint only: GET /koi-net/edges (ours, not in "
+                          "koi-net) keeps edge_rid/source_node/target_node; edges on the wire are "
+                          "EdgeProfile since 2026-11-05 (proven by the interop gate)")
 def test_edges_endpoint_matches_edge_profile(node):
     _make_edge(node)
     edges = httpx.get(f"{node['base']}/edges", timeout=10).json()

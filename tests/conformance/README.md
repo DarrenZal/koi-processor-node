@@ -1,8 +1,9 @@
 # KOI-net conformance tests
 
 These tests parse our node's KOI-net payloads with the upstream `koi_net.protocol`
-models. koi-net is **not** a runtime dependency of this repository; it lives only in a
-separate test venv.
+models, acting as an independent koi-net client from a separate venv. Our node has also
+imported `koi_net.protocol` at runtime since 2026-11-05 (`requirements.txt`); these tests
+still build requests and parse replies with koi-net's own models, not with our code.
 
 ```bash
 python3.13 -m venv .venv-koinet            # koi-net 2.1.2 needs Python >= 3.12
@@ -48,11 +49,17 @@ KOI_TEST_API_URL=http://127.0.0.1:<port> .venv-koinet/bin/python -m pytest tests
 
 The tests call `KOI_TEST_API_URL` + `/koi-net` and skip when it is unset. They refuse any
 node not named `conformance-*` and any host but 127.0.0.1/localhost, and
-`tests/conftest.py` refuses the live API's port 8351. In the main test venv this module
-skips (no koi-net).
+`tests/conftest.py` refuses the live API's port 8351. In the main test venv
+`tests/conformance/conftest.py` does not collect this module (no koi-net), so it neither runs
+nor shows as skipped there.
 
 Divergences 12, 15, 16 and 17 are strict xfails, each limited to the failure that
 divergence causes: fixing one makes its test fail until the marker is removed and
 [the conformance register](../../docs/architecture/koi-protocol-conformance.md) is updated. A setup problem fails the test
-outright. The other divergences have no test here.
+outright. Divergence 23 is pinned by a passing test that asserts today's behaviour, because
+its fix is still a decision. The other divergences have no test here.
+
+[The interop gate](../interop/README.md) runs this suite as its `conformance` case, against a
+throwaway node it builds itself: `tools/sandboxed.sh -- python3 tests/interop/run_gate.py
+--node-python <python> --cases conformance`.
 

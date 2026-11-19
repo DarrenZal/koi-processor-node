@@ -206,9 +206,9 @@ def test_no_shell_value_reaches_psql_sql_in_federation_scripts():
         found += [(f.name, *b) for b in bad]
         c_total, stdin_total = c_total + c_sites, stdin_total + stdin_sites
     # The scan must see the sites at all: 5 -c calls (bootstrap 1, setup-node 3, validate-node 1) and
-    # 6 stdin calls (bootstrap 3, compute-sas 1, approve-peer-edges 2) at the time of writing.
+    # 7 stdin calls (bootstrap 3, compute-sas 1, approve-peer-edges 3) at the time of writing.
     # bootstrap-node.sh is not in every copy of this repository.
-    c_floor, stdin_floor = (5, 6) if BOOTSTRAP.exists() else (4, 3)
+    c_floor, stdin_floor = (5, 7) if BOOTSTRAP.exists() else (4, 4)
     assert c_total >= c_floor and stdin_total >= stdin_floor, (c_total, stdin_total)
     assert found == [], found
 
@@ -300,15 +300,12 @@ def test_compute_sas_stops_on_a_sql_error(tmp_path):
 # approve-peer-edges.sh: its converted lookups stop on a SQL error instead of reporting success.
 
 def test_approve_peer_edges_stops_on_a_sql_error_in_the_edge_lookup(tmp_path):
-    local, peer = "orn:koi-net.node:local-test+11", "orn:koi-net.node:peer-test+22"
-    state = tmp_path / "state"
-    state.mkdir()
-    (state / "admin_token").write_text("t\n")
-    env = _env(tmp_path, {"psql": PSQL, "curl": CURL}, STUB_HEALTH=json.dumps({"node": {"node_rid": local}}),
-               STUB_REPLIES=json.dumps({"koi_net_peer_aliases": peer}),
-               STUB_SQL_ERROR="FROM koi_net_edges", KOI_STATE_DIR=str(state))
-    r = subprocess.run(["bash", str(FED / "approve-peer-edges.sh"), "peer-test"], env=env, cwd=tmp_path,
-                       capture_output=True, text=True, timeout=60, stdin=subprocess.DEVNULL)
+    from tests.test_approve_peer_edges_script import LOCAL, PEER, ROW
+    env = _env(tmp_path, {"psql": PSQL, "curl": CURL}, STUB_HEALTH=json.dumps({"node": {"node_rid": LOCAL}}),
+               STUB_REPLIES=json.dumps({"koi_net_peer_aliases": PEER, "json_build_object": json.dumps(ROW)}),
+               STUB_SQL_ERROR="FROM koi_net_edges", KOI_ADMIN_TOKEN="t", KOI_STATE_DIR=str(tmp_path / "state"))
+    r = subprocess.run(["bash", str(FED / "approve-peer-edges.sh"), "peer-test"], input="y\n", env=env, cwd=tmp_path,
+                       capture_output=True, text=True, timeout=60)
     assert r.returncode == 1, r.stdout + r.stderr
     assert "Edge lookup failed" in r.stdout + r.stderr and "already approved" not in r.stdout
 

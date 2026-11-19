@@ -39,11 +39,30 @@ except ImportError:
     _ENCRYPTION_AVAILABLE = False
 
 
-# Personal-KOI entity types this node handles
-DEFAULT_EVENT_TYPES = ["Organization", "Person", "Project", "Concept", "Location", "Vault-file"]
+# RID types this node advertises in its NodeProfile (divergence 21). koi-net nodes
+# subscribe to the intersection of their interests with provides.event, and compare RID
+# types, so these are RID types (as rid-lib names them), not bare names. Before
+# 2026-11-05 they were bare names ("Vault-file", "Person"); edges negotiated then still
+# hold those, and api.event_queue.edge_admits accepts both forms.
+#
+# - orn:koi-net.node / orn:koi-net.edge: our own node and edge objects. Spec section 5.2
+#   says every node provides them implicitly; koi-net 2.1.2 intersects with
+#   provides.event only, so they are listed, as the reference coordinator lists them.
+# - orn:koi-net.vault-file: vault-sync events (the namespace divergence 1 migrates).
+# - orn:koi-net.<entity type>: the koi_rid namespace /register-entity mints for federated
+#   entities. They are listed, as the bare names were, so an edge rewritten from these
+#   delivers what it delivered before. Our node emits no events under these RIDs today
+#   (entity events are domain events, divergences 9 and 17).
+DEFAULT_EVENT_TYPES = [
+    "orn:koi-net.node", "orn:koi-net.edge",
+    "orn:koi-net.organization", "orn:koi-net.person", "orn:koi-net.project",
+    "orn:koi-net.concept", "orn:koi-net.location", "orn:koi-net.vault-file",
+]
 DEFAULT_STATE_TYPES = [
-    "Organization", "Person", "Project", "Concept", "Location",
-    "Meeting", "Vault-file",
+    "orn:koi-net.node",
+    "orn:koi-net.organization", "orn:koi-net.person", "orn:koi-net.project",
+    "orn:koi-net.concept", "orn:koi-net.location", "orn:koi-net.meeting",
+    "orn:koi-net.vault-file",
 ]
 
 # Key storage directory

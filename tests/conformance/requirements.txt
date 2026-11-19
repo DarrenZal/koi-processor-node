@@ -1,4 +1,5 @@
-# Test-only. Install into a separate venv; koi-net is NOT a runtime dependency.
+# For the conformance tests' own venv (.venv-koinet), separate from the node's interpreter.
+# The node pins koi-net 2.1.2 too, in the top-level requirements.txt (runtime since 2026-11-05).
 # koi-net 2.1.2 uses PEP 695 `type` statements, so it imports only on Python >= 3.12.
 # Its package metadata declares Requires-Python >= 3.10.
 koi-net==2.1.2

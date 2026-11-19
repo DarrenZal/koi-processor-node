@@ -10,7 +10,7 @@ from them here. Sensors and document ingestion fill the rest.
 
 ## Prerequisites
 
-- Python 3.11+ and a virtualenv
+- Python 3.12+ (tested on 3.13) and a virtualenv: `koi-net` 2.1.2 does not import on 3.11
 - PostgreSQL 14+ with the `pgvector` extension, version 0.8 or later: the 3072-dim
   `halfvec` HNSW indexes need 0.7, and filtered vector search sets `hnsw.iterative_scan`,
   which 0.8.0 added (migration 109 sets it for the database)
@@ -30,7 +30,7 @@ from them here. Sensors and document ingestion fill the rest.
 ## 1. Install and config
 
 ```bash
-python3.11 -m venv venv && venv/bin/pip install -r requirements.txt
+python3.13 -m venv venv && venv/bin/pip install -r requirements.txt
 cp config/personal.env.example config/personal.env   # gitignored; fill in your values
 # minimum: POSTGRES_URL=postgresql://<user>@localhost:5432/personal_koi
 #          OPENAI_API_KEY=sk-...
@@ -175,7 +175,7 @@ Measured against the code and a running node on 2026-11-01. Send a token as
 | `POST /sql` | In every mode, a token with the personal scope (401 without one, 403 for a narrower scope), and `KOI_SQL_RO_DSN`. |
 | `POST`/`PATCH` under `/claims` and `GET /claims/identity`; `POST /knowledge/episodes`, `POST /knowledge/facts/{id}/retract`; `POST /entities/merge`, `/unmerge`, `/retype`, `/reproject-closures`, `/entities/{uri}/close` | In every mode, `KOI_CLAIMS_SERVICE_TOKEN` or a valid session token from `session_tokens`. |
 | `POST /documents/ingest`, `GET /documents/{rid}` | In every mode, `KOI_INGEST_SERVICE_TOKEN` or a valid session token. |
-| With `KOI_NET_ENABLED=true`: `POST /koi-net/edges/approve` and `/reject`, `/koi-net/vault-sync/*`, `/koi-net/commons/intake*` | A caller at 127.0.0.1 or ::1, plus the admin token when one is set. `/koi-net/commons/intake*` also accepts `KOI_COMMONS_SERVICE_TOKEN` from any address. The KOI-net protocol routes accept unsigned requests unless `KOI_STRICT_MODE=true`. |
+| With `KOI_NET_ENABLED=true`: `POST /koi-net/edges/approve` and `/reject`, `/koi-net/nodes/readmit`, `/koi-net/vault-sync/*`, `/koi-net/commons/intake*` | A loopback caller with the admin token as its bearer; with no token configured, 503 for every caller. `/koi-net/commons/intake*` also accepts `KOI_COMMONS_SERVICE_TOKEN` from any address. The KOI-net protocol routes accept unsigned requests unless `KOI_STRICT_MODE=true`. |
 
 Every other route has no authentication in any mode. That includes writes such as
 `POST /tasks/ingest`, `POST /ingest` and `PATCH /tasks/{key}`, and reads such as
@@ -212,6 +212,13 @@ Settings (all optional; each token is any long random string):
 - `KOI_ADMIN_TOKEN` (or the file `$KOI_STATE_DIR/admin_token`), `KOI_MCP_TOKEN`,
   `KOI_CLAIMS_SERVICE_TOKEN`: each gives the personal scope on the read routes.
   `KOI_INGEST_SERVICE_TOKEN` gives no read scope.
+- The KOI-net admin routes (`/koi-net/edges/approve`, `/edges/reject`, `/nodes/readmit`,
+  `/vault-sync/*`, and the commons intake routes) need `KOI_ADMIN_TOKEN` or the file
+  `$KOI_STATE_DIR/admin_token`, sent as `Authorization: Bearer <token>` from the same machine.
+  With neither configured they answer 503 `ADMIN_TOKEN_UNCONFIGURED`, even from localhost:
+  a request from loopback is not an operator on its own. Set the token before you approve
+  your first peer. The commons intake routes also accept `KOI_COMMONS_SERVICE_TOKEN` as the
+  bearer, from any address, for a remote dashboard.
 - `KOI_READ_SCOPES_FILE`: a JSON object that maps the SHA-256 hex digest of a token to a
   narrower scope, `{"view": "public"}` or `{"view": "field", "fields": [...]}`
   (format: `parse_scope_entry` in `api/read_scope.py`).

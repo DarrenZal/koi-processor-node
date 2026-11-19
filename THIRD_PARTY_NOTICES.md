@@ -59,6 +59,7 @@ dependency's licence as declared in its package metadata when this export was bu
 | feedparser | BSD-2-Clause |
 | playwright | Apache-2.0 |
 | jsonschema | MIT |
+| koi-net | MIT |
 
 ## JavaScript dependencies (`koi-query-api.ts`)
 

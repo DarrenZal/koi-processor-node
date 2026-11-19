@@ -14,6 +14,7 @@ from typing import Any, Dict, List, Optional
 
 import asyncpg
 from rid_lib.core import RID as _RidLibRID
+from rid_lib.ext import Bundle as _RidLibBundle
 
 from api.federation_blocks import FederationBlocksUnavailable, blocked_hashes, is_blocked, rid_sha256
 from api.koi_protocol import EventType, WireEvent, WireManifest, timestamp_to_z_format
@@ -131,7 +132,7 @@ class EventQueue:
             # target_node scoping: NULL = broadcast (visible to all), non-NULL = unicast.
             rows = await conn.fetch(
                 """
-                SELECT id, event_id::TEXT, event_type, rid, manifest, contents, source_node, queued_at
+                SELECT id, event_id::TEXT, event_type, rid, manifest, contents, source_node, target_node, queued_at
                 FROM koi_net_events
                 WHERE NOT ($1 = ANY(delivered_to))
                   AND expires_at > NOW()
@@ -159,56 +160,22 @@ class EventQueue:
                     withheld += 1
                     continue
 
-                # If rid_types filter specified, gate BOTH rid-typed events and
-                # domain events against the edge's declared types.
-                #
-                # Domain events used to bypass this filter entirely, on the
-                # stated assumption that they "carry their own routing". They do
-                # not: every domain event is queued with target_node NULL, i.e.
-                # broadcast. The bypass therefore delivered the full
-                # entity/task/intent/knowledge stream to every peer holding an
-                # approved POLL edge, regardless of what that edge declared.
-                # The domain name is now matched as a pseudo rid-type, so an
-                # edge must opt in by listing it (e.g. "task", "entity").
-                if rid_types is not None:
-                    contents_raw = row["contents"]
-                    is_domain_event = False
-                    domain = None
-                    if contents_raw:
-                        c = json.loads(contents_raw) if isinstance(contents_raw, str) else contents_raw
-                        if isinstance(c, dict) and "_koi_domain" in c:
-                            is_domain_event = True
-                            domain = c.get("_koi_domain")
-                    lowered = [rt.lower() for rt in rid_types]
-                    excluded = False
-                    if is_domain_event:
-                        # Fail closed: a malformed domain event carrying no
-                        # domain name cannot be matched against the edge, so it
-                        # is not delivered.
-                        excluded = not domain or str(domain).lower() not in lowered
-                    else:
-                        # RID format: orn:koi-net.{type}:{slug}+{hash}
-                        #
-                        # Fail closed on an unrecognized namespace. extract_rid_type
-                        # returns None for anything outside koi-net.* / entity:,
-                        # which includes orn:obsidian.note: — the namespace our own
-                        # vault frontmatter uses. Treating None as "no opinion" let
-                        # such events through every edge scope regardless of what
-                        # the edge declared. Unknown type matches no declared type.
-                        rid_type = extract_rid_type(row["rid"])
-                        excluded = rid_type is None or rid_type.lower() not in lowered
-
-                    if excluded:
-                        # Mark excluded events delivered rather than skipping
-                        # them. A filter decision is PERMANENT for this peer,
-                        # not a deferral — if we leave them unmarked they stay
-                        # at the head of the peer's queue (ORDER BY queued_at
-                        # ASC LIMIT n) and every subsequent poll re-reads and
-                        # re-drops the same rows, returning an empty list
-                        # forever. That starves the peer of everything behind
-                        # them until the 24h TTL lapses.
-                        ids_to_mark.append(row["id"])
-                        continue
+                # Edge scope: api.event_queue.edge_admits (divergences 4, 9, 10, 21, 23).
+                # It runs for every row, also when the edge declares no rid_types,
+                # because another node's node and edge objects are never relayed.
+                excluded = not (self._own_unicast_protocol_object(row, requesting_node)
+                                or edge_admits(rid_types, row["rid"], row["contents"], row["source_node"], self.node_rid))
+                if excluded:
+                    # Mark excluded events delivered rather than skipping
+                    # them. A filter decision is PERMANENT for this peer,
+                    # not a deferral — if we leave them unmarked they stay
+                    # at the head of the peer's queue (ORDER BY queued_at
+                    # ASC LIMIT n) and every subsequent poll re-reads and
+                    # re-drops the same rows, returning an empty list
+                    # forever. That starves the peer of everything behind
+                    # them until the 24h TTL lapses.
+                    ids_to_mark.append(row["id"])
+                    continue
 
                 event = {
                     "event_id": row["event_id"],
@@ -245,6 +212,7 @@ class EventQueue:
         target_node: str,
         limit: int = 50,
         rid_types: Optional[List[str]] = None,
+        mark_excluded: bool = False,
     ) -> List[Dict[str, Any]]:
         """Get events not yet delivered to target_node WITHOUT marking them.
 
@@ -262,7 +230,7 @@ class EventQueue:
             # Same target_node scoping as poll(): NULL = broadcast, non-NULL = unicast.
             rows = await conn.fetch(
                 """
-                SELECT id, event_id::TEXT, event_type, rid, manifest, contents, source_node, queued_at
+                SELECT id, event_id::TEXT, event_type, rid, manifest, contents, source_node, target_node, queued_at
                 FROM koi_net_events
                 WHERE NOT ($1 = ANY(delivered_to))
                   AND expires_at > NOW()
@@ -278,40 +246,19 @@ class EventQueue:
                 return []
 
             events = []
+            excluded_ids = []
             for row in rows:
-                if is_blocked(blocked, row["rid"], row["contents"], row["manifest"]):
+                # Same scope rule as poll(). peek is read-only by default: nothing is marked.
+                # The WEBHOOK pusher passes mark_excluded=True, so a blocked or excluded row is
+                # marked delivered as poll() marks it, and cannot sit at the head of a narrow
+                # edge's queue and starve it. The rows returned are never marked here; the
+                # caller marks them after the push succeeds (peek -> push -> mark).
+                if is_blocked(blocked, row["rid"], row["contents"], row["manifest"]) or not (
+                    self._own_unicast_protocol_object(row, target_node)
+                    or edge_admits(rid_types, row["rid"], row["contents"], row["source_node"], self.node_rid)
+                ):
+                    excluded_ids.append(row["id"])
                     continue
-                # Same scope rule as poll(): a domain event is matched on its
-                # _koi_domain value rather than bypassing the edge filter. The
-                # old bypass handed the full entity/task/intent/knowledge stream
-                # to any peer holding an approved edge regardless of what that
-                # edge declared, because domain events are queued with
-                # target_node NULL (broadcast).
-                #
-                # NOTE: poll() additionally marks excluded events delivered, so a
-                # narrow edge cannot starve behind a filtered queue head. peek()
-                # is deliberately non-marking (peek -> push -> mark), so that half
-                # belongs to the CALLER: WEBHOOK delivery must mark excluded ids
-                # too. Zero WEBHOOK edges exist on either node (verified 0/0) —
-                # do not approve one until that caller-side marking exists.
-                if rid_types is not None:
-                    contents_raw = row["contents"]
-                    is_domain_event = False
-                    domain = None
-                    if contents_raw:
-                        c = json.loads(contents_raw) if isinstance(contents_raw, str) else contents_raw
-                        if isinstance(c, dict) and "_koi_domain" in c:
-                            is_domain_event = True
-                            domain = c.get("_koi_domain")
-                    lowered = [rt.lower() for rt in rid_types]
-                    if is_domain_event:
-                        if not domain or str(domain).lower() not in lowered:
-                            continue
-                    else:
-                        # Fail closed on an unrecognized namespace — see poll().
-                        rid_type = extract_rid_type(row["rid"])
-                        if rid_type is None or rid_type.lower() not in lowered:
-                            continue
 
                 events.append({
                     "event_id": row["event_id"],
@@ -323,6 +270,52 @@ class EventQueue:
                     "queued_at": row["queued_at"].isoformat() if row["queued_at"] else None,
                 })
 
+            if mark_excluded and excluded_ids:
+                await conn.execute(
+                    "UPDATE koi_net_events SET delivered_to = array_append(delivered_to, $1) WHERE id = ANY($2)",
+                    target_node,
+                    excluded_ids,
+                )
+            return events
+
+    def _own_unicast_protocol_object(self, row, requesting_node: str) -> bool:
+        """Our own node or edge object queued for this peer alone: first contact and edge
+        negotiation for a partial node (api/koi_net_negotiation.py). Delivered whatever the
+        edge's rid_types declare, as koi-net sends negotiation directly."""
+        return (row["target_node"] == requesting_node and row["source_node"] == self.node_rid
+                and is_protocol_rid(row["rid"]))
+
+    async def poll_own_protocol_objects(self, requesting_node: str, limit: int = 50) -> List[Dict[str, Any]]:
+        """For a peer with no approved edge under the membrane (decision D1): only our own
+        node and edge objects queued for it alone, marked delivered. Nothing else is read or
+        marked, so its other events wait for an approved edge."""
+        async with self.pool.acquire() as conn:
+            rows = await conn.fetch(
+                """
+                SELECT id, event_id::TEXT, event_type, rid, manifest, contents, source_node, queued_at
+                FROM koi_net_events
+                WHERE target_node = $1 AND source_node = $2
+                  AND NOT ($1 = ANY(delivered_to)) AND expires_at > NOW()
+                  AND (lower(rid) LIKE 'orn:koi-net.node:%' OR lower(rid) LIKE 'orn:koi-net.edge:%')
+                ORDER BY queued_at ASC
+                LIMIT $3
+                """,
+                requesting_node, self.node_rid, limit,
+            )
+            events = [{
+                "event_id": row["event_id"],
+                "event_type": row["event_type"],
+                "rid": row["rid"],
+                "manifest": json.loads(row["manifest"]) if row["manifest"] else None,
+                "contents": json.loads(row["contents"]) if row["contents"] else None,
+                "source_node": row["source_node"],
+                "queued_at": row["queued_at"].isoformat() if row["queued_at"] else None,
+            } for row in rows if is_protocol_rid(row["rid"])]
+            if rows:
+                await conn.execute(
+                    "UPDATE koi_net_events SET delivered_to = array_append(delivered_to, $1) WHERE id = ANY($2)",
+                    requesting_node, [row["id"] for row in rows],
+                )
             return events
 
     async def mark_delivered(self, event_ids: List[str], target_node: str) -> int:
@@ -396,6 +389,110 @@ class EventQueue:
                 "SELECT COUNT(*) as cnt FROM koi_net_events WHERE expires_at > NOW()"
             )
             return row["cnt"]
+
+
+# The two vault-file namespaces are one RID type while divergence 1's migration
+# (koi-net.vault-file -> personal-koi.vault-file) is open, so an edge naming either
+# receives both, as the bare name "Vault-file" always has.
+_VAULT_FILE_CONTEXTS = frozenset({"orn:koi-net.vault-file", "orn:personal-koi.vault-file"})
+NODE_CONTEXT = "orn:koi-net.node"
+EDGE_CONTEXT = "orn:koi-net.edge"
+_PROTOCOL_PREFIXES = (NODE_CONTEXT + ":", EDGE_CONTEXT + ":")
+
+
+def is_protocol_rid(rid: Any) -> bool:
+    """Whether `rid` names a node or edge object, decided on the string itself.
+
+    A prefix test rather than rid-lib's parse, so a malformed reference
+    (`orn:koi-net.node:peer`, no hash) or odd casing (`orn:KOI-NET.node:...`) still counts.
+    """
+    return isinstance(rid, str) and rid.strip().lower().startswith(_PROTOCOL_PREFIXES)
+
+
+def rid_context(rid: Any) -> Optional[str]:
+    """The RID type of `rid` as rid-lib names it (`orn:koi-net.vault-file`), or None."""
+    try:
+        return _RidLibRID.from_string(rid).context
+    except (ValueError, TypeError, AttributeError):
+        return None
+
+
+def _declared_type_matches(declared: str, context: str, legacy_type: Optional[str]) -> bool:
+    """One entry of an edge's rid_types against one event's RID type.
+
+    Two forms are accepted. An upstream RID type (`orn:koi-net.vault-file`, as koi-net
+    edges carry and as our provides.event now advertises) must match the event's RID type
+    exactly. A bare name (`Vault-file`, `Person`: what edges negotiated before this change
+    hold) matches the last segment of the namespace, as before (divergence 13).
+    """
+    entry = declared.strip()
+    if ":" in entry:
+        entry = entry.lower()
+        if entry == context.lower():
+            return True
+        return entry in _VAULT_FILE_CONTEXTS and context in _VAULT_FILE_CONTEXTS
+    return legacy_type is not None and legacy_type.lower() == entry.lower()
+
+
+def edge_admits(
+    rid_types: Optional[List[str]],
+    rid: Any,
+    contents: Any,
+    source_node: Optional[str],
+    own_node: str,
+) -> bool:
+    """Whether an edge declaring `rid_types` may be served this event. Fails closed.
+
+    - Domain events (contents carry `_koi_domain`) match on the domain name (divergence 9).
+    - `rid_types is None` means the edge declares no scope; `[]` declares nothing (4).
+    - A RID that does not parse matches nothing (10, 13).
+    - Node and edge objects (`orn:koi-net.node`, `orn:koi-net.edge`) are served only when
+      this node is their source, whatever the edge declares. Our broadcast table also
+      holds events peers pushed to us (divergence 23), so without this a stock node's
+      handshake bundle would be relayed to every peer whose edge names node objects.
+    """
+    # First, before anything else can admit it: another node's node or edge object.
+    if is_protocol_rid(rid) and source_node != own_node:
+        return False
+    c = contents
+    if isinstance(c, str):
+        try:
+            c = json.loads(c)
+        except ValueError:
+            c = None
+    if isinstance(c, dict) and "_koi_domain" in c:
+        if rid_types is None:
+            return True
+        domain = c.get("_koi_domain")
+        return bool(domain) and str(domain).lower() in [str(rt).lower() for rt in rid_types]
+
+    context = rid_context(rid)
+    if rid_types is None:
+        return True
+    if context is None:
+        return False
+    legacy_type = extract_rid_type(rid)
+    return any(isinstance(d, str) and _declared_type_matches(d, context, legacy_type) for d in rid_types)
+
+
+def lists_own_node(rid_types: Optional[List[str]]) -> bool:
+    """Whether a /rids/fetch request for `rid_types` should list our own node RID."""
+    if not rid_types:
+        return True
+    return any(isinstance(t, str) and t.strip().lower() == NODE_CONTEXT for t in rid_types)
+
+
+def own_node_bundle(profile: Any) -> Dict[str, Any]:
+    """Our node's own KoiNetNode bundle, as rid-lib builds it (divergence 15).
+
+    Contents are the profile as we advertise it: the koi_net.protocol.node.NodeProfile
+    fields (base_url, node_type, provides, public_key) plus our extensions
+    (node_rid, node_name, encryption_key, ontology_uri, ontology_version), which upstream
+    ignores. The manifest hash is rid-lib's hash of exactly those contents.
+    """
+    contents = profile.model_dump(exclude_none=True)
+    bundle = _RidLibBundle.generate(_RidLibRID.from_string(profile.node_rid), contents)
+    return bundle.model_dump(mode="json")
 
 
 def extract_rid_type(rid: str) -> Optional[str]:

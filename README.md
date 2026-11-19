@@ -179,11 +179,11 @@ gitignored pattern — see [`config/README.md`](config/README.md). Load env with
 
 ## Python version and optional packages
 
-Use Python 3.11, as the quickstart does. The "Python 3.8+" line at the top of
-`requirements.txt` and the 3.8 check in `scripts/setup.sh` are out of date: the pinned
-`rid-lib` 3.3.0 and `jsonschema` 4.26.0 require Python 3.10 or later, and so does the
-`scrapling` release that resolves on 3.11 (0.4.7), while the `numpy` that resolves there
-(2.4.6) requires 3.11.
+Use Python 3.12 or later; this repository is tested on 3.13, as the quickstart uses.
+`koi-net` 2.1.2, pinned in `requirements.txt`, uses Python 3.12 syntax (PEP 695 `type`
+statements) although its metadata declares 3.10, so on 3.11 the service fails at import. The
+other floors are lower: the pinned `rid-lib` 3.3.0 and `jsonschema` 4.26.0 require 3.10 or
+later, and the `numpy` that resolves on 3.11 (2.4.6) requires 3.11.
 
 `requirements.txt` installs what the personal-KOI node needs. These modules need packages
 it does not install. Install them yourself if you use the module:
@@ -256,38 +256,39 @@ mistake them for live components:
 ## KOI-net conformance
 
 This node implements the [KOI-net](https://github.com/DynamicalSystemsGroup/koi-net) node
-protocol itself, on PostgreSQL, and builds on DynamicalSystemsGroup's (DSG)
+protocol itself, on PostgreSQL. It builds on DynamicalSystemsGroup's (DSG)
 [`rid-lib`](https://github.com/DynamicalSystemsGroup/rid-lib) (pinned 3.3.0) for RIDs,
-manifests and bundles. Known differences from the reference implementation are recorded,
-with a class and a reason, in
+manifests and bundles, and, since 2026-11-05, on koi-net's own `koi_net.protocol` (pinned
+2.1.2) for events, edge bundles, the fetch routes' requests and replies, and envelope
+signatures. Known differences from the reference implementation are recorded, with a class
+and a reason, in
 [`docs/architecture/koi-protocol-conformance.md`](docs/architecture/koi-protocol-conformance.md).
 That register is maintained by hand and covers what has been found so far.
 
-- **Interop test, 2026-10-31.** A stock node built from DSG's `koi-net-node-template`
-  (koi-net 2.1.2) completes the handshake with this node only when the approved-edge gate
-  is off; the example config turns it on (18). Edge negotiation never starts: after a
-  handshake this node neither pushes its own node bundle nor proposes an edge (20), and its
-  `provides.event` lists entity-type names with no `KoiNetNode`/`KoiNetEdge` (21). So no
-  poll and no broadcast beyond the handshake happen in either direction. The gate is
-  recorded as not passed.
-- **Other open divergences** that affect a koi-net peer: vault-file RIDs use the reserved
-  `koi-net.` namespace (1), FORGET events carry the full record (2), our own node bundle is
-  not served by `/bundles/fetch` (15; the gate did not reach it), broadcast responses carry
-  a body where the spec requires an empty one (22), poll responses carry an `event_id`
-  field inside the signed payload, so a koi-net client cannot verify a non-empty poll
-  response (16), domain events use application keys as RIDs (17), edges are negotiated
-  through our own `/handshake` and exposed in a different shape (7, 12), `base_url` means
-  the host root rather than the KOI-net API root (14), and edge scopes mix domain and
-  entity types (9).
+- **Interop gate.** [`tests/interop/`](tests/interop/) runs this node against stock nodes
+  built from DSG's `koi-net-node-template` (koi-net 2.1.2), full and partial, with the
+  approved-edge gate off and on. The first run, on 2026-10-31, got no further than the
+  handshake (18, 20, 21). Since 2026-11-05 every protocol step passes in all four cases,
+  with no xfail and no skip: the handshake, the stock node caching our node bundle, the edge
+  approved on both sides, `/rids/fetch`, our vault-file event reaching the stock node, and
+  our node polling a full stock node.
+- **Open divergences:** vault-file RIDs use the reserved
+  `koi-net.` namespace, and the cutover waits for peers (1); FORGET events carry the full
+  record (2); domain events use application keys as RIDs (17); inbound broadcast events
+  are served to every poller (23); `/rids/fetch` lists entity RIDs the fetch endpoints
+  cannot serve (25); our poller ignores the `rid_types` of the edge it polls (27); edges
+  with peers running our code are still negotiated through our own `/handshake` (7); and
+  edge scopes mix domain and entity types (9). A deployed node must also set `KOI_BASE_URL`
+  to its KOI-net root before stock nodes can call it (14).
 - **Conformance tests:** in [`tests/conformance/`](tests/conformance/), koi-net builds and
   signs each protocol request, the tests send it to a throwaway node, and they parse and
-  verify the response with the `koi_net.protocol` models: 9 pass, and 4 strict xfails cover
-  divergences 12, 15, 16 and 17. Requests our own node sends (the poller's poll and
-  broadcast calls, where 14 lives) are not covered. koi-net is a test-only dependency there.
-- **Plan:** adopt `koi_net.protocol` at runtime once this service is on the versions koi-net
-  2.1.2 requires (FastAPI ≥ 0.115.12, Starlette ≥ 1.3.1, httpx ≥ 0.28.1, uvicorn ≥ 0.34.2,
-  Python ≥ 3.12; this service pins FastAPI 0.104.1, httpx 0.25.2 and uvicorn 0.24.0 on Python
-  3.11), and fix 14–17, 20 and 21 by conforming rather than forking.
+  verify the response with the `koi_net.protocol` models: 14 pass, and 2 strict xfails pin
+  divergence 17 and our own `GET /koi-net/edges` listing route (12). Requests our own node
+  sends are covered by the interop gate.
+- **Runtime:** `requirements.txt` pins `koi-net==2.1.2`, which needs Python 3.12 or later,
+  and the web stack it requires (FastAPI 0.162.0, httpx 0.28.1, uvicorn 0.54.0). What the
+  node takes from `koi_net.protocol`, and what stays ours and why, is in the register's
+  [runtime-use table](docs/architecture/koi-protocol-conformance.md#runtime-use-of-koi_netprotocol-2026-11-05).
 
 ## Testing
 

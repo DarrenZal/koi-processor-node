@@ -241,13 +241,14 @@ echo "  Approve outbound edge to $REMOTE_NAME?"
 echo "  This allows them to poll your events."
 read -rp "  [y/N]: " approve_outbound
 
-if [[ "$approve_outbound" == "y" || "$approve_outbound" == "Y" ]]; then
-    # Read admin token
-    ADMIN_TOKEN_FILE="${KOI_STATE_DIR:-$HOME/.config/personal-koi/koi-state}/admin_token"
-    if [[ ! -f "$ADMIN_TOKEN_FILE" ]]; then
-        log_fatal "Admin token not found at $ADMIN_TOKEN_FILE"
-    fi
-    ADMIN_TOKEN=$(cat "$ADMIN_TOKEN_FILE")
+if [[ "$approve_outbound" == "y" || "$approve_outbound" == "Y" ]] && [[ -z "${LOCAL_ADMIN_TOKEN:-}" ]]; then
+    # Without a token the server refuses every admin call (503), so say so and carry on to the
+    # inbound step and the summary rather than ending here.
+    log_warn "No admin token (KOI_ADMIN_TOKEN or $LOCAL_TOKEN_FILE); approve later with POST /koi-net/edges/approve"
+    OUTBOUND_STATUS="PROPOSED (no admin token)"
+elif [[ "$approve_outbound" == "y" || "$approve_outbound" == "Y" ]]; then
+    # Step 6's token: KOI_ADMIN_TOKEN first, then the state-dir file, as the server reads it.
+    ADMIN_TOKEN="$LOCAL_ADMIN_TOKEN"
 
     # Look up the outbound edge_rid from the database
     LOCAL_NODE_RID=$(echo "$LOCAL_PROFILE" | python3 -c "import json,sys; print(json.load(sys.stdin).get('node_rid',''))")
@@ -277,7 +278,7 @@ print(row[0] if row else '')
             -H "Content-Type: application/json" \
             -H @<(printf 'Authorization: Bearer %s\n' "$ADMIN_TOKEN") \
             -d "{\"edge_rid\": \"$OUTBOUND_EDGE_RID\"}" \
-            "${LOCAL_URL}/koi-net/edges/approve" 2>/dev/null)
+            "${LOCAL_URL}/koi-net/edges/approve" 2>/dev/null) || APPROVE_RESULT=""  # under set -e a failed curl would end the script silently
 
         if echo "$APPROVE_RESULT" | python3 -c "import json,sys; d=json.load(sys.stdin); sys.exit(0 if d.get('status')=='approved' else 1)" 2>/dev/null; then
             OUTBOUND_STATUS="APPROVED"
@@ -290,6 +291,56 @@ print(row[0] if row else '')
 else
     OUTBOUND_STATUS="PROPOSED (not approved)"
     log_info "Outbound edge left as PROPOSED"
+fi
+
+# ============================================
+# STEP 7b: Approve local inbound edge, when the handshake deferred it
+# ============================================
+# A node with deferral on (KOI_NET_DEFER_UNKNOWN_HANDSHAKE, see the conformance register,
+# entry 26) leaves an unknown node's inbound edge, the one that lets this node poll it,
+# PROPOSED. Nothing to do when it is already APPROVED.
+
+LOCAL_NODE_RID=${LOCAL_NODE_RID:-$(echo "$LOCAL_PROFILE" | python3 -c "import json,sys; print(json.load(sys.stdin).get('node_rid',''))")}
+# Values reach Python through the environment, never pasted into its source (see step 7).
+INBOUND_EDGE_RID=$(CP_LOCAL_NODE_RID="$LOCAL_NODE_RID" CP_REMOTE_RID="$REMOTE_RID" python3 -c "
+import psycopg2, os
+pg_url = os.environ.get('POSTGRES_URL', 'postgresql:///personal_koi')
+conn = psycopg2.connect(pg_url)
+cur = conn.cursor()
+cur.execute('''
+    SELECT edge_rid FROM koi_net_edges
+    WHERE source_node = %s AND target_node = %s AND status = 'PROPOSED'
+    ORDER BY created_at DESC LIMIT 1
+''', (os.environ['CP_REMOTE_RID'], os.environ['CP_LOCAL_NODE_RID']))
+row = cur.fetchone()
+conn.close()
+print(row[0] if row else '')
+" 2>/dev/null || echo "")
+
+if [[ -n "$INBOUND_EDGE_RID" ]]; then
+    echo ""
+    echo "  Approve inbound edge from $REMOTE_NAME?"
+    echo "  This lets your node poll their events, and lets $REMOTE_NAME broadcast events to your node"
+    echo "  while the membrane is on. Every new inbound edge waits for this approval."
+    read -rp "  [y/N]: " approve_inbound
+    if [[ "$approve_inbound" == "y" || "$approve_inbound" == "Y" ]] && [[ -z "${LOCAL_ADMIN_TOKEN:-}" ]]; then
+        log_warn "No admin token (KOI_ADMIN_TOKEN or $LOCAL_TOKEN_FILE); approve later with POST /koi-net/edges/approve"
+    elif [[ "$approve_inbound" == "y" || "$approve_inbound" == "Y" ]]; then
+        ADMIN_TOKEN="$LOCAL_ADMIN_TOKEN"  # step 6's token: KOI_ADMIN_TOKEN first, then the file, as the server reads it
+        APPROVE_BODY=$(CP_EDGE_RID="$INBOUND_EDGE_RID" python3 -c "import json,os; print(json.dumps({'edge_rid': os.environ['CP_EDGE_RID']}))")
+        APPROVE_RESULT=$(curl -sf -X POST \
+            -H "Content-Type: application/json" \
+            -H @<(printf 'Authorization: Bearer %s\n' "$ADMIN_TOKEN") \
+            -d "$APPROVE_BODY" \
+            "${LOCAL_URL}/koi-net/edges/approve" 2>/dev/null) || APPROVE_RESULT=""  # a failed curl must not end the script (set -e)
+        if echo "$APPROVE_RESULT" | python3 -c "import json,sys; d=json.load(sys.stdin); sys.exit(0 if d.get('status')=='approved' else 1)" 2>/dev/null; then
+            log_info "Inbound edge approved: $INBOUND_EDGE_RID"
+        else
+            log_warn "Edge approval failed for $INBOUND_EDGE_RID"
+        fi
+    else
+        log_info "Inbound edge left as PROPOSED"
+    fi
 fi
 
 # ============================================
@@ -353,9 +404,20 @@ echo ""
 echo "  Local -> Remote handshake:  $(if true; then echo 'sent'; fi)"
 echo "  Remote -> Local handshake:  registered"
 
-# Local inbound edge status, as the local handshake reported it (stored, not assumed): a new
-# inbound edge stays PROPOSED until the operator approves it.
-INBOUND_STATUS=$(echo "$LOCAL_HS_RESPONSE" | python3 -c "import json,sys; print(json.load(sys.stdin).get('edge_status') or 'UNKNOWN')" 2>/dev/null || echo "UNKNOWN")
+# Local inbound edge status, as stored (it used to be printed as "APPROVED (auto)"
+# without looking).
+INBOUND_STATUS=$(CP_LOCAL_NODE_RID="$LOCAL_NODE_RID" CP_REMOTE_RID="$REMOTE_RID" python3 -c "
+import psycopg2, os
+conn = psycopg2.connect(os.environ.get('POSTGRES_URL', 'postgresql:///personal_koi'))
+cur = conn.cursor()
+cur.execute('''
+    SELECT status FROM koi_net_edges WHERE source_node = %s AND target_node = %s
+    ORDER BY (status = 'APPROVED') DESC, updated_at DESC NULLS LAST LIMIT 1
+''', (os.environ['CP_REMOTE_RID'], os.environ['CP_LOCAL_NODE_RID']))
+row = cur.fetchone()
+conn.close()
+print(row[0] if row else 'MISSING (no inbound edge stored)')
+" 2>/dev/null || echo "UNKNOWN (lookup failed)")
 echo "  Local inbound edge:         $INBOUND_STATUS"
 if [[ "$INBOUND_STATUS" == "PROPOSED" ]]; then
     echo "    (approve it with POST ${LOCAL_URL}/koi-net/edges/approve before this node polls the peer)"

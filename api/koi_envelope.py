@@ -1,7 +1,14 @@
 """
 KOI SignedEnvelope utilities.
 
-ECDSA P-256 with raw r||s base64 signatures matching KOI-net reference behavior.
+ECDSA P-256 with raw r||s base64 signatures, made and checked by koi-net's own
+koi_net.protocol.secure (since 2026-11-06): PrivateKey.sign and PublicKey.verify, over the bytes
+koi-net signs, UnsignedEnvelope.model_dump_json(exclude_none=True).
+
+The envelope stays a dict here rather than koi-net's SignedEnvelope[T]: that generic only
+admits koi-net's request and response models, and our extensions (/handshake,
+/events/confirm, the poll and broadcast forms our older peers read) are not among them. A
+dict payload dumped from koi-net's model serialises to the same bytes as the typed envelope.
 
 Public keys loaded from koi_net_nodes database table.
 """
@@ -15,19 +22,13 @@ from typing import Any, Dict, Optional, Tuple
 
 from pydantic import BaseModel, ConfigDict
 
-try:
-    from cryptography.exceptions import InvalidSignature
-    from cryptography.hazmat.primitives import hashes, serialization
-    from cryptography.hazmat.primitives.asymmetric import ec
-    from cryptography.hazmat.primitives.asymmetric.utils import (
-        decode_dss_signature,
-        encode_dss_signature,
-    )
-    _CRYPTO_AVAILABLE = True
-except Exception:
-    _CRYPTO_AVAILABLE = False
-    InvalidSignature = Exception
-    ec = None
+import api.koi_net_floor  # noqa: F401  (Python >= 3.12; quiets koi-net's debug logging)
+from koi_net.protocol.secure import PrivateKey as _KoiNetPrivateKey, PublicKey as _KoiNetPublicKey
+
+# koi-net requires cryptography, so it is always present once the import above succeeds.
+from cryptography.exceptions import InvalidSignature
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import ec
 
 
 class EnvelopeError(Exception):
@@ -72,38 +73,12 @@ def _unsigned_envelope_bytes(
     return unsigned.model_dump_json(exclude_none=True).encode("utf-8")
 
 
-def _der_to_raw_signature(der_signature: bytes) -> bytes:
-    """Convert DER-encoded ECDSA signature to raw r||s format."""
-    r, s = decode_dss_signature(der_signature)
-    byte_length = (ec.SECP256R1().key_size + 7) // 8
-    r_bytes = r.to_bytes(byte_length, byteorder="big")
-    s_bytes = s.to_bytes(byte_length, byteorder="big")
-    return r_bytes + s_bytes
-
-
-def _raw_to_der_signature(raw_signature: bytes) -> bytes:
-    """Convert raw r||s signature to DER-encoded format."""
-    byte_length = (ec.SECP256R1().key_size + 7) // 8
-    if len(raw_signature) != 2 * byte_length:
-        raise EnvelopeError(
-            f"Raw signature must be {2 * byte_length} bytes",
-            code="INVALID_SIGNATURE_FORMAT",
-        )
-    r_bytes = raw_signature[:byte_length]
-    s_bytes = raw_signature[byte_length:]
-    r = int.from_bytes(r_bytes, byteorder="big")
-    s = int.from_bytes(s_bytes, byteorder="big")
-    return encode_dss_signature(r, s)
-
-
 # =============================================================================
 # Key loading
 # =============================================================================
 
 def load_private_key_from_file(path: str, password: Optional[str] = None):
     """Load ECDSA private key from PEM file."""
-    if not _CRYPTO_AVAILABLE:
-        return None
     if not os.path.exists(path):
         return None
     with open(path, "rb") as f:
@@ -113,11 +88,16 @@ def load_private_key_from_file(path: str, password: Optional[str] = None):
 
 
 def load_public_key_from_der_b64(der_b64: str):
-    """Load ECDSA public key from DER-encoded base64 string."""
-    if not _CRYPTO_AVAILABLE:
-        return None
+    """Load ECDSA public key from DER-encoded base64 string.
+
+    Raises ValueError for any other key type. A node RID can be bound to any key (the binding
+    is a hash), so an RSA or Ed25519 key would pass a binding check and then crash ECDSA
+    verification with a 500 instead of a refusal."""
     der_bytes = b64decode(der_b64)
-    return serialization.load_der_public_key(der_bytes)
+    key = serialization.load_der_public_key(der_bytes)
+    if not isinstance(key, ec.EllipticCurvePublicKey):
+        raise ValueError(f"not an EC public key: {type(key).__name__}")
+    return key
 
 
 def public_key_to_der_b64(public_key) -> str:
@@ -140,16 +120,12 @@ def sign_envelope(
     private_key,
 ) -> Dict[str, Any]:
     """Sign an envelope payload and return the signed envelope dict."""
-    if not _CRYPTO_AVAILABLE:
-        raise EnvelopeError("cryptography package required for signing", code="CRYPTO_UNAVAILABLE")
     message = _unsigned_envelope_bytes(payload, source_node, target_node)
-    der_signature = private_key.sign(message, ec.ECDSA(hashes.SHA256()))
-    raw_signature = _der_to_raw_signature(der_signature)
     return {
         "payload": payload,
         "source_node": source_node,
         "target_node": target_node,
-        "signature": b64encode(raw_signature).decode(),
+        "signature": _KoiNetPrivateKey(private_key).sign(message),
     }
 
 
@@ -164,11 +140,6 @@ def verify_envelope(
     Returns (payload, source_node) on success.
     Raises EnvelopeError on failure.
     """
-    if not _CRYPTO_AVAILABLE:
-        raise EnvelopeError(
-            "cryptography package required for verification",
-            code="CRYPTO_UNAVAILABLE",
-        )
 
     source_node = envelope.get("source_node")
     target_node = envelope.get("target_node")
@@ -188,13 +159,17 @@ def verify_envelope(
         )
 
     message = _unsigned_envelope_bytes(envelope["payload"], source_node, target_node)
-    raw_signature = b64decode(signature)
-    der_signature = _raw_to_der_signature(raw_signature)
 
+    if not isinstance(public_key, ec.EllipticCurvePublicKey):
+        raise EnvelopeError("Signing key is not an EC public key", code="INVALID_SIGNATURE")
+    if not isinstance(signature, str):
+        raise EnvelopeError("Signature must be a base64 string", code="INVALID_SIGNATURE_FORMAT")
     try:
-        public_key.verify(der_signature, message, ec.ECDSA(hashes.SHA256()))
+        _KoiNetPublicKey(public_key).verify(signature, message)
     except InvalidSignature as exc:
         raise EnvelopeError("Invalid envelope signature", code="INVALID_SIGNATURE") from exc
+    except (ValueError, TypeError) as exc:  # not base64, or not a raw r||s of the curve's size
+        raise EnvelopeError(f"Malformed signature: {exc}", code="INVALID_SIGNATURE_FORMAT") from exc
 
     return envelope["payload"], source_node
 

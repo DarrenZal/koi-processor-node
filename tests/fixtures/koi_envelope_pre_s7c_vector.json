@@ -1,0 +1,18 @@
+{
+  "_about": "An envelope signed by api/koi_envelope.py before signing moved to koi_net.protocol.secure (2026-11-06), with a throwaway key generated for this fixture. Only its public key is kept.",
+  "public_key_der_b64": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE44hYeCdS82pT8MiF0FLFRiIWE/B+cdNbvpbFsGgIp7E7IS5l3E90BcTs73spj+a6ndQ4UdMiRu9R6W9jsHnm+Q==",
+  "envelope": {
+    "payload": {
+      "type": "events_payload",
+      "events": [
+        {
+          "rid": "orn:koi-net.node:golden+0",
+          "event_type": "NEW"
+        }
+      ]
+    },
+    "source_node": "orn:koi-net.node:golden-a+abd77b957e081fd7c7077ea93ab712e515b9d9b6cfeb2806005add6798e1197d",
+    "target_node": "orn:koi-net.node:golden-b+abd77b957e081fd7c7077ea93ab712e515b9d9b6cfeb2806005add6798e1197d",
+    "signature": "YKD/rAe+oiaImU6BgxoCQrwqN0zxt2e87iTbzXxbSEU9LEpluqlKUbgkiaoHBz0vOftba4GBS1UOXL0ACDaL+A=="
+  }
+}

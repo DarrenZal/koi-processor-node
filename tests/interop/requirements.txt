@@ -1,0 +1,6 @@
+# Test-only. Installed into .venv-koinet by tests/interop/setup_stock_nodes.sh.
+# The node pins koi-net 2.1.2 too, in the top-level requirements.txt (runtime since 2026-11-05).
+# koi-net 2.1.2 uses PEP 695 `type` statements, so it imports only on Python >= 3.12.
+-r ../conformance/requirements.txt
+# Read the throwaway node's database from the gate tests.
+psycopg[binary]==3.3.8

@@ -240,7 +240,9 @@ async def router(db, monkeypatch):
         async def unwrap(_request, allow_unsigned=False):
             return payload, PEER, False
         monkeypatch.setattr(knr, "_unwrap_request", unwrap)
-        return json.loads((await handler(None)).body)
+        body = (await handler(None)).body
+        # /events/broadcast answers koi-net peers with an empty body (divergence 22).
+        return json.loads(body) if body else None
     return pool, call
 
 

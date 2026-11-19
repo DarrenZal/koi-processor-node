@@ -61,13 +61,39 @@ LOCAL_RID=$(echo "$HEALTH" | python3 -c "import sys,json; d=json.load(sys.stdin)
 log_info "Local node: $LOCAL_RID"
 
 # ============================================
-# READ ADMIN TOKEN
+# READ ADMIN TOKEN (KOI_ADMIN_TOKEN first, then the state-dir file, as the server reads it)
 # ============================================
 
-if [[ -f "$ADMIN_TOKEN_FILE" ]]; then
+ADMIN_TOKEN="${KOI_ADMIN_TOKEN:-}"
+if [[ -z "$ADMIN_TOKEN" && -f "$ADMIN_TOKEN_FILE" ]]; then
     ADMIN_TOKEN=$(cat "$ADMIN_TOKEN_FILE")
-else
-    log_fatal "Admin token not found at $ADMIN_TOKEN_FILE"
+fi
+[[ -n "$ADMIN_TOKEN" ]] || log_fatal "No admin token (KOI_ADMIN_TOKEN or $ADMIN_TOKEN_FILE); the server refuses admin calls without one"
+
+# ============================================
+# SHOW WHAT WOULD BE APPROVED (register entry 26)
+# ============================================
+# An unsigned first handshake can register an unused RID with the caller's own address and
+# encryption key. Compare these with the values the peer reads off its own node
+# (scripts/federation/fingerprints.py own), out of band, as in the SAS step.
+
+PEER_ROW=$(psql -d "$PSQL_DB" -At -v rid="$PEER_RID" -v ON_ERROR_STOP=1 <<'SQL'
+SELECT json_build_object('node_rid', node_rid, 'node_name', node_name, 'base_url', base_url,
+                         'public_key', public_key, 'encryption_key', encryption_key)
+FROM koi_net_nodes WHERE node_rid = :'rid';
+SQL
+) || log_fatal "Peer row lookup failed"
+[[ -n "$PEER_ROW" ]] || log_fatal "No node row for $PEER_RID"
+
+echo ""
+echo "  Stored for this peer:"
+printf '%s' "$PEER_ROW" | python3 "$SCRIPT_DIR/fingerprints.py" row
+echo ""
+echo "  The peer prints its own with: python3 scripts/federation/fingerprints.py own"
+read -rp "  Do all four match what the peer read you out of band? [y/N]: " MATCHES
+if [[ "$MATCHES" != "y" && "$MATCHES" != "Y" ]]; then
+    log_warn "Not approved. If they differ, reject the peer: POST /koi-net/edges/reject with deactivate_node"
+    exit 1
 fi
 
 # ============================================
